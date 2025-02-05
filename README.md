@@ -1,4 +1,4 @@
-# CFR25 - CocciCube
+# CFR25 - OverTheRainBot
 
 ## Important !!
 
