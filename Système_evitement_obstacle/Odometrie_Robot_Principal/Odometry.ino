@@ -7,6 +7,7 @@
 #define ENCBD 18  //Encodeur B du moteur droit
 #define PWMD 11   //Control moteur droit
 #define DIRD 13   //Gérer le sens de rotation du moteur droit
+// test
 
 #define ENCAG 21  //Encodeur A du moteur gauche
 #define ENCBG 20  //Encodeur B du moteur gauche
