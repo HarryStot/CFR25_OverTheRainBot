@@ -1,13 +1,10 @@
 #include "Motor_Control.h"
 #include "Odometry.h"
-#include <stdint.h>
-#include <VARSTEP_ultrasonic.h>
 
 #define ENCAD 19  //Encodeur A du moteur droit
 #define ENCBD 18  //Encodeur B du moteur droit
 #define PWMD 11   //Control moteur droit
 #define DIRD 13   //Gérer le sens de rotation du moteur droit
-// test
 
 #define ENCAG 21  //Encodeur A du moteur gauche
 #define ENCBG 20  //Encodeur B du moteur gauche
@@ -30,6 +27,7 @@ float thetaref;
 float eps = 0.1;  //Précision acceptable sur la position. Si eps est trop petit il est possible que le robot n'atteigne jamais sa position.
 float x_int, y_int;
 float pi = 3.14;
+float chrono;
 
 int iter = 0; 
 int State = 0;
@@ -41,8 +39,8 @@ double dist; //Capteur ultrason
 float K1 = 30;  //Correcteur proportionnel à déterminer
 
 //Objectifs
-float ly_goal[4] = { 0, 1, 1, 2 };
-float lx_goal[4] = { 0, 0, 2, 1 };
+float ly_goal[4] = { 0, 1, 1 };
+float lx_goal[4] = { 0, 0, 2 };
 int arrayLength = sizeof(lx_goal) / sizeof(lx_goal[0]);  //La fonction length n'existe pas sur Arduino
 float x_goal, y_goal;
 int i_goal = 0;
@@ -65,29 +63,31 @@ void setup() {
   Serial.println("Match");
 
   motorR.init();                                                        //Initialisation du moteur
-  attachInterrupt(digitalPinToInterrupt(ENCAD), readEncoderD, RISING);  //Les encodeurs doivent être branchées sur des pins d'interruption. Sur Arduino Méga se sont les pins 2,3,18,19,20 et 21
+  attachInterrupt(digitalPinToInterrupt(ENCAD), readEncoderD, RISING);  //Les encodeurs doivent être branchées sur des pins d'interruption. Sur Arduino Méga se sont les pins 2,3,18,19,"STOP" et 21
 
   motorL.init();
   attachInterrupt(digitalPinToInterrupt(ENCAG), readEncoderG, RISING);
 
   delay(1500);
+  chrono = millis();
 }
 
 void loop() {
 
   dist = my_HCSR04.distance_cm();
+
   posR = -motorR.pos;  //Position des roues
   posL = motorL.pos;
   robot.updateOdometry(posR, posL, x_goal, y_goal);  //Calcul de l'odométrie rangé dans Odometry.h et Odometry.cpp pour gagner de la place
 
   //Machine d'états
-  if (State == 0)  //Départ
+  if (State == "Depart")
   {
     motorR.setMotorSpeed(0);  //Le controle des moteurs se fait avec cette fonction, elle prend en argument une vitesse de rotation phi
     motorL.setMotorSpeed(0);
   }
 
-  if (State == 4)  //Navigation
+  if (State == "Navigation")
   {
     x_goal = lx_goal[i_goal];
     y_goal = ly_goal[i_goal];
@@ -97,13 +97,19 @@ void loop() {
     phiR = (v + w * L) / r;
     phiL = (v - w * L) / r;
 
+    // Serial.print("phiR = ");
+    // Serial.print(phiR);
+    // Serial.print("   ");
+    // Serial.print("phiL = ");
+    // Serial.println(phiL);
+
     motorR.setMotorSpeed(phiR);
     motorL.setMotorSpeed(phiL);
     x_int = robot.x + dist * 0.01 * cos(robot.theta) - 0.3 * sin(robot.theta);  //Utile pour l'évitement d'obstacle
     y_int = robot.y + dist * 0.01 * sin(robot.theta) + 0.3 * cos(robot.theta);  //Il sert à calculer un nouveau point à côté de l'obstacle
   }
 
-  if (State == 5)  //Évitement d'obstacle (méthode de Kinjy, Lilian et Guillaume en robotique mais à modifier par la team 4 plus tard)
+  if (State == "Evitement")  //Évitement d'obstacle (méthode de Kinjy, Lilian et Guillaume en robotique mais à modifier par la team 4 plus tard)
   {
     thetaref = atan2((y_int - robot.y), (x_int - robot.x));
     w = K1 * atan2(sin(thetaref - robot.theta), cos(thetaref - robot.theta));
@@ -116,7 +122,7 @@ void loop() {
     Serial.println(absf(robot.y - y_int));
   }
 
-  if (State == 20)  //STOP
+  if (State == "STOP")
   {
     Serial.println("STOP");
     motorR.setMotorSpeed(0);
@@ -124,11 +130,13 @@ void loop() {
   }
 
   //Transitions
-  if (State == 0 && dist > 30) { State = 4; }
-  if (State == 4 && (absf(robot.y - y_goal) < eps) && (absf(robot.x - x_goal)) < eps && i_goal != arrayLength) { State = 4; i_goal = i_goal + 1;}                                                                                                                             //Utiliser absf pour calculer une valeur absolue
-  if (State == 4 && (absf(robot.y - y_goal) < eps) && (absf(robot.x - x_goal)) < eps && i_goal == arrayLength) { State = 20; }  //Jsp pourquoi la fct abs de Arduino ne marche pas correctement
-  if (State == 4 && dist < 50) { State = 5; }
-  if (State == 5 && (absf(robot.y - y_int) < eps) && (absf(robot.x - x_int)) < eps) { State = 4; }
+  if (State == "Depart" && dist > 30) { State = "Navigation"; }
+  if (State == "Navigation" && (absf(robot.y - y_goal) < eps) && (absf(robot.x - x_goal)) < eps && i_goal != arrayLength) { State = "Navigation"; i_goal = i_goal + 1;}                                                                                                                             //Utiliser absf pour calculer une valeur absolue
+  if (State == "Navigation" && (absf(robot.y - y_goal) < eps) && (absf(robot.x - x_goal)) < eps && i_goal == arrayLength) { State = "STOP"; }  //Jsp pourquoi la fct abs de Arduino ne marche pas correctement
+  if (State == "Navigation" && dist < 50) { State = "Evitement"; }
+  if (State == "Evitement" && (absf(robot.y - y_int) < eps) && (absf(robot.x - x_int)) < eps) { State = "Navigation"; }
+  if (millis() - chrono > 85000) { State = "Navigation"; lx_goal[4] = {0}; ly_goal[4] = {0};}
+  if (millis() - chrono > 99000) { State = "STOP"; }
   iter = iter + 1;
 }
 
