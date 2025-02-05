@@ -1,4 +1,3 @@
-@ -0,0 +1,151 @@
 #include "Motor_Control.h"
 #include "Odometry.h"
 #include <stdint.h>
@@ -15,7 +14,7 @@
 #define DIRG 12   //Gérer le sens de rotation du moteur gauche
 
 #define trigger_pin 8 //capteur
-#define echo_pin 9  //capteur 
+#define echo_pin 9 //capteur
 
 Motor motorR(ENCAD, ENCBD, PWMD, DIRD);  //Crée un objet moteur
 Motor motorL(ENCAG, ENCBG, PWMG, DIRG);
@@ -31,12 +30,12 @@ float eps = 0.1;  //Précision acceptable sur la position. Si eps est trop petit
 float x_int, y_int;
 float pi = 3.14;
 
-int iter = 0;
+int iter = 0; 
 int State = 0;
 
 const uint8_t pinTirette = 27; //Tirette
 
-double dist; //Capteur ultrason
+double dist; //Capteur ultrason 
 
 float K1 = 30;  //Correcteur proportionnel à déterminer
 
@@ -51,18 +50,15 @@ Odometry robot(L, r);
 
 VARSTEP_ultrasonic my_HCSR04(trigger_pin, echo_pin); 
 
-//Capteurs
-float dist = 99999;
-
 void setup() {
   Serial.begin(9600);
 
   pinMode(pinTirette,INPUT_PULLUP );
 
-  wait(0);
+  wait(0); //attend que la tirette soit placée dans le support de tirette
   Serial.println("Initialisation");
 
-  wait(1);
+  wait(1); //attend que la tirette soit enlevée du support
   Serial.println("Match");
 
   motorR.init();                                                        //Initialisation du moteur
@@ -76,7 +72,7 @@ void setup() {
 
 void loop() {
 
-  dist = my_HCSR04.distance_cm(); //Lecture de la distance
+  dist = my_HCSR04.distance_cm();
   posR = -motorR.pos;  //Position des roues
   posL = motorL.pos;
   robot.updateOdometry(posR, posL, x_goal, y_goal);  //Calcul de l'odométrie rangé dans Odometry.h et Odometry.cpp pour gagner de la place
@@ -137,7 +133,7 @@ float absf(float val) {
   return val < 0 ? -val : val;
 }
 
-void  wait (int status) {
+void  wait (int status) {  //Fonction pour la tirette
   while(digitalRead(pinTirette) != status){
     delay(100);
   }
