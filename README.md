@@ -4,7 +4,7 @@
 
 > N'oubliez pas de `commit` et `push` votre code pour que tout le monde y ait accès
 
-### Bienvenue sur le Github de CocciCube
+### Bienvenue sur le Github de OverTheRainBot
 
 Vous pouvez retrouver ici les différentes versions des codes. 
 
