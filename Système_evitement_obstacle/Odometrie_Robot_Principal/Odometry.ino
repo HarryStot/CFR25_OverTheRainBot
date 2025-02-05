@@ -55,10 +55,12 @@ void setup() {
 
   pinMode(pinTirette,INPUT_PULLUP );
 
-  wait(0); //attend que la tirette soit placée dans le support de tirette
+  //Le contrôle de la tirette se fait avec le fonction "wait", elle prend en argument un état: 0 (tirette enfoncée) ou 1 (tirette enlévée)
+
+  wait(0); // attend que la tirette soit enfoncée dans le support
   Serial.println("Initialisation");
 
-  wait(1); //attend que la tirette soit enlevée du support
+  wait(1); // on attend que la tirette soit enlevée du support
   Serial.println("Match");
 
   motorR.init();                                                        //Initialisation du moteur
@@ -80,7 +82,7 @@ void loop() {
   //Machine d'états
   if (State == 0)  //Départ
   {
-    motorR.setMotorSpeed(0);  //Le control des moteurs se fait avec cette fonction, elle prend en argument une vitesse de rotation phi
+    motorR.setMotorSpeed(0);  //Le controle des moteurs se fait avec cette fonction, elle prend en argument une vitesse de rotation phi
     motorL.setMotorSpeed(0);
   }
 
