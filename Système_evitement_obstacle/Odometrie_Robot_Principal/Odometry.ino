@@ -1,5 +1,7 @@
 #include "Motor_Control.h"
 #include "Odometry.h"
+#include <stdint.h>
+#include <VARSTEP_ultrasonic.h>
 
 #define ENCAD 19  //Encodeur A du moteur droit
 #define ENCBD 18  //Encodeur B du moteur droit
@@ -10,6 +12,9 @@
 #define ENCBG 20  //Encodeur B du moteur gauche
 #define PWMG 3    //Control moteur gauche
 #define DIRG 12   //Gérer le sens de rotation du moteur gauche
+
+#define trigger_pin 8 //capteur
+#define echo_pin 9  //capteur 
 
 Motor motorR(ENCAD, ENCBD, PWMD, DIRD);  //Crée un objet moteur
 Motor motorL(ENCAG, ENCBG, PWMG, DIRG);
@@ -28,6 +33,10 @@ float pi = 3.14;
 int iter = 0;
 int State = 0;
 
+const uint8_t pinTirette = 27; //Tirette
+
+double dist; //Capteur ultrason
+
 float K1 = 30;  //Correcteur proportionnel à déterminer
 
 //Objectifs
@@ -39,11 +48,21 @@ int i_goal = 0;
 
 Odometry robot(L, r);
 
+VARSTEP_ultrasonic my_HCSR04(trigger_pin, echo_pin); 
+
 //Capteurs
 float dist = 99999;
 
 void setup() {
   Serial.begin(9600);
+
+  pinMode(pinTirette,INPUT_PULLUP );
+
+  wait(0);
+  Serial.println("Initialisation");
+
+  wait(1);
+  Serial.println("Match");
 
   motorR.init();                                                        //Initialisation du moteur
   attachInterrupt(digitalPinToInterrupt(ENCAD), readEncoderD, RISING);  //Les encodeurs doivent être branchées sur des pins d'interruption. Sur Arduino Méga se sont les pins 2,3,18,19,20 et 21
@@ -56,6 +75,7 @@ void setup() {
 
 void loop() {
 
+  dist = my_HCSR04.distance_cm(); //Lecture de la distance
   posR = -motorR.pos;  //Position des roues
   posL = motorL.pos;
   robot.updateOdometry(posR, posL, x_goal, y_goal);  //Calcul de l'odométrie rangé dans Odometry.h et Odometry.cpp pour gagner de la place
@@ -114,6 +134,12 @@ void loop() {
 
 float absf(float val) {
   return val < 0 ? -val : val;
+}
+
+void  wait (int status) {
+  while(digitalRead(pinTirette) != status){
+    delay(100);
+  }
 }
 
 void readEncoderD() {  //Tout est dans le nom
