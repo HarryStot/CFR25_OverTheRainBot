@@ -1,23 +1,23 @@
 #include "Motor_Control.h"
 #include "Odometry.h"
 
-#define ENCAD 3  //Encodeur A du moteur droit
-#define ENCBD 9  //Encodeur B du moteur droit
-#define IN1D 11  //Tourner moteur en avant
-#define IN2D 10  //Tourner moteur en arrière
+#define ENCAD 19  //Encodeur A du moteur droit
+#define ENCBD 18  //Encodeur B du moteur droit
+#define PWMD 11   //Control moteur droit
+#define DIRD 13   //Gérer le sens de rotation du moteur droit
 
-#define ENCAG 2  //Encodeur A du moteur gauche
-#define ENCBG 8  //Encodeur B du moteur gauche
-#define IN1G  5  //Tourner moteur en avant
-#define IN2G  6  //Tourner moteur en arrière
+#define ENCAG 21  //Encodeur A du moteur gauche
+#define ENCBG 20  //Encodeur B du moteur gauche
+#define PWMG 3    //Control moteur gauche
+#define DIRG 12   //Gérer le sens de rotation du moteur gauche
 
-Motor motorR(ENCAD, ENCBD, IN1D, IN2D);  //Crée un objet moteur
-Motor motorL(ENCAG, ENCBG, IN1G, IN2G);
+Motor motorR(ENCAD, ENCBD, PWMD, DIRD);  //Crée un objet moteur
+Motor motorL(ENCAG, ENCBG, PWMG, DIRG);
 
 // Caractéristiques robot + Odométrie
 float phiR = 0.0, phiL = 0.0;
-float L = 0.095 / 2;  //Distance entre les roues sur 2
-float r = 0.08 / 2;   //Rayon des roues
+float L = 0.245 / 2;  //Distance entre les roues sur 2
+float r = 0.065 / 2;        //Rayon des roues
 float v, w;
 float posL = 0, posR = 0;
 float thetaref;
