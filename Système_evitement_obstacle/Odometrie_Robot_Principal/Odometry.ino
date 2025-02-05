@@ -1,5 +1,7 @@
 #include "Motor_Control.h"
 #include "Odometry.h"
+#include <stdint.h>
+#include <VARSTEP_ultrasonic.h>
 
 #define ENCAD 19  //Encodeur A du moteur droit
 #define ENCBD 18  //Encodeur B du moteur droit
@@ -14,143 +16,129 @@
 #define trigger_pin 8 //capteur
 #define echo_pin 9 //capteur
 
-Motor motorR(ENCAD, ENCBD, PWMD, DIRD);  //Crée un objet moteur
+Motor motorR(ENCAD, ENCBD, PWMD, DIRD);
 Motor motorL(ENCAG, ENCBG, PWMG, DIRG);
 
-// Caractéristiques robot + Odométrie
 float phiR = 0.0, phiL = 0.0;
-float L = 0.245 / 2;  //Distance entre les roues sur 2
-float r = 0.065 / 2;        //Rayon des roues
+float L = 0.245 / 2;
+float r = 0.065 / 2;
 float v, w;
 float posL = 0, posR = 0;
 float thetaref;
-float eps = 0.1;  //Précision acceptable sur la position. Si eps est trop petit il est possible que le robot n'atteigne jamais sa position.
+float eps = 0.1;
 float x_int, y_int;
 float pi = 3.14;
 float chrono;
 
 int iter = 0; 
-int State = 0;
+const uint8_t pinTirette = 27;
+double dist;
+float K1 = 300;
 
-const uint8_t pinTirette = 27; //Tirette
-
-double dist; //Capteur ultrason 
-
-float K1 = 30;  //Correcteur proportionnel à déterminer
-
-//Objectifs
-float ly_goal[4] = { 0, 1, 1 };
-float lx_goal[4] = { 0, 0, 2 };
-int arrayLength = sizeof(lx_goal) / sizeof(lx_goal[0]);  //La fonction length n'existe pas sur Arduino
+float ly_goal[4] = { 0, 1, 1, 0 }; //Prévoir le point de retour à la base 0,0
+float lx_goal[4] = { 0, 0, 2, 0 };
+int arrayLength = sizeof(lx_goal) / sizeof(lx_goal[0]);
 float x_goal, y_goal;
 int i_goal = 0;
 
 Odometry robot(L, r);
+VARSTEP_ultrasonic my_HCSR04(trigger_pin, echo_pin);
 
-VARSTEP_ultrasonic my_HCSR04(trigger_pin, echo_pin); 
+enum StateType { DEPART, NAVIGATION, EVITEMENT, STOP };
+StateType State = DEPART;
 
 void setup() {
   Serial.begin(9600);
+  pinMode(pinTirette, INPUT_PULLUP);
 
-  pinMode(pinTirette,INPUT_PULLUP );
-
-  //Le contrôle de la tirette se fait avec le fonction "wait", elle prend en argument un état: 0 (tirette enfoncée) ou 1 (tirette enlévée)
-
-  wait(0); // attend que la tirette soit enfoncée dans le support
+  wait(0);
   Serial.println("Initialisation");
-
-  wait(1); // on attend que la tirette soit enlevée du support
+  wait(1);
   Serial.println("Match");
 
-  motorR.init();                                                        //Initialisation du moteur
-  attachInterrupt(digitalPinToInterrupt(ENCAD), readEncoderD, RISING);  //Les encodeurs doivent être branchées sur des pins d'interruption. Sur Arduino Méga se sont les pins 2,3,18,19,"STOP" et 21
-
+  motorR.init();
+  attachInterrupt(digitalPinToInterrupt(ENCAD), readEncoderD, RISING);
   motorL.init();
   attachInterrupt(digitalPinToInterrupt(ENCAG), readEncoderG, RISING);
-
+  
   delay(1500);
   chrono = millis();
 }
 
 void loop() {
-
-  dist = my_HCSR04.distance_cm();
-
-  posR = -motorR.pos;  //Position des roues
+  Serial.println(State);
+  Serial.println(dist);
+  
+  //dist = my_HCSR04.distance_cm();
+  dist = 999;
+  posR = -motorR.pos;
   posL = motorL.pos;
-  robot.updateOdometry(posR, posL, x_goal, y_goal);  //Calcul de l'odométrie rangé dans Odometry.h et Odometry.cpp pour gagner de la place
+  robot.updateOdometry(posR, posL, x_goal, y_goal);
 
-  //Machine d'états
-  if (State == "Depart")
-  {
-    motorR.setMotorSpeed(0);  //Le controle des moteurs se fait avec cette fonction, elle prend en argument une vitesse de rotation phi
-    motorL.setMotorSpeed(0);
+  switch (State) {
+    case DEPART:
+      motorR.setMotorSpeed(0);
+      motorL.setMotorSpeed(0);
+      break;
+    
+    case NAVIGATION:
+      x_goal = lx_goal[i_goal];
+      y_goal = ly_goal[i_goal];
+      thetaref = atan2((y_goal - robot.y), (x_goal - robot.x));
+      w = K1 * atan2(sin(thetaref - robot.theta), cos(thetaref - robot.theta));
+      if (absf(thetaref - robot.theta) > eps) {
+        v = 0;
+        phiR = (v + w * L) / r;
+        phiL = (v - w * L) / r;
+        motorR.setMotorSpeed(phiR);
+        motorL.setMotorSpeed(phiL);
+      } else {
+        v = 10;
+        phiR = (v + w * L) / r;
+        phiL = (v - w * L) / r;
+        motorR.setMotorSpeed(phiR);
+        motorL.setMotorSpeed(phiL);
+      }
+      break;
+    
+    case EVITEMENT:
+      v = 0;
+      w = 0;
+      phiR = (v + w * L) / r;
+      phiL = (v - w * L) / r;
+      motorR.setMotorSpeed(phiR);
+      motorL.setMotorSpeed(phiL);
+      break;
+    
+    case STOP:
+      Serial.println("STOP");
+      motorR.setMotorSpeed(0);
+      motorL.setMotorSpeed(0);
+      break;
   }
 
-  if (State == "Navigation")
-  {
-    x_goal = lx_goal[i_goal];
-    y_goal = ly_goal[i_goal];
-    v = 10;  //A régler selon l'étalonnage et la saturation des moteurs
-    thetaref = atan2((y_goal - robot.y), (x_goal - robot.x));
-    w = K1 * atan2(sin(thetaref - robot.theta), cos(thetaref - robot.theta));
-    phiR = (v + w * L) / r;
-    phiL = (v - w * L) / r;
-
-    // Serial.print("phiR = ");
-    // Serial.print(phiR);
-    // Serial.print("   ");
-    // Serial.print("phiL = ");
-    // Serial.println(phiL);
-
-    motorR.setMotorSpeed(phiR);
-    motorL.setMotorSpeed(phiL);
-    x_int = robot.x + dist * 0.01 * cos(robot.theta) - 0.3 * sin(robot.theta);  //Utile pour l'évitement d'obstacle
-    y_int = robot.y + dist * 0.01 * sin(robot.theta) + 0.3 * cos(robot.theta);  //Il sert à calculer un nouveau point à côté de l'obstacle
-  }
-
-  if (State == "Evitement")  //Évitement d'obstacle (méthode de Kinjy, Lilian et Guillaume en robotique mais à modifier par la team 4 plus tard)
-  {
-    thetaref = atan2((y_int - robot.y), (x_int - robot.x));
-    w = K1 * atan2(sin(thetaref - robot.theta), cos(thetaref - robot.theta));
-    phiR = (v + w * L) / r;
-    phiL = (v - w * L) / r;
-
-    motorR.setMotorSpeed(phiR);
-    motorL.setMotorSpeed(phiL);
-    Serial.println(absf(robot.x - x_int));
-    Serial.println(absf(robot.y - y_int));
-  }
-
-  if (State == "STOP")
-  {
-    Serial.println("STOP");
-    motorR.setMotorSpeed(0);
-    motorL.setMotorSpeed(0);
-  }
-
-  //Transitions
-  if (State == "Depart" && dist > 30) { State = "Navigation"; }
-  if (State == "Navigation" && (absf(robot.y - y_goal) < eps) && (absf(robot.x - x_goal)) < eps && i_goal != arrayLength) { State = "Navigation"; i_goal = i_goal + 1;}                                                                                                                             //Utiliser absf pour calculer une valeur absolue
-  if (State == "Navigation" && (absf(robot.y - y_goal) < eps) && (absf(robot.x - x_goal)) < eps && i_goal == arrayLength) { State = "STOP"; }  //Jsp pourquoi la fct abs de Arduino ne marche pas correctement
-  if (State == "Navigation" && dist < 50) { State = "Evitement"; }
-  if (State == "Evitement" && (absf(robot.y - y_int) < eps) && (absf(robot.x - x_int)) < eps) { State = "Navigation"; }
-  if (millis() - chrono > 85000) { State = "Navigation"; lx_goal[4] = {0}; ly_goal[4] = {0};}
-  if (millis() - chrono > 99000) { State = "STOP"; }
-  iter = iter + 1;
+  if (State == DEPART && dist > 30) { State = NAVIGATION; }
+  if (State == NAVIGATION && (absf(robot.y - y_goal) < eps) && (absf(robot.x - x_goal)) < eps && i_goal != arrayLength) { State = NAVIGATION; i_goal++; }
+  if (State == NAVIGATION && (absf(robot.y - y_goal) < eps) && (absf(robot.x - x_goal)) < eps && i_goal == arrayLength) { State = STOP; }
+  if (State == NAVIGATION && dist > 0 && dist < 50) { State = EVITEMENT; }
+  if (State == EVITEMENT && dist > 50) { State = NAVIGATION; }
+  if (millis() - chrono > 85000) { State = NAVIGATION; i_goal = arrayLength;}
+  if (millis() - chrono > 99000) { State = STOP; }
+  
+  iter++;
 }
 
 float absf(float val) {
   return val < 0 ? -val : val;
 }
 
-void  wait (int status) {  //Fonction pour la tirette
-  while(digitalRead(pinTirette) != status){
+void wait(int status) {
+  while (digitalRead(pinTirette) != status) {
     delay(100);
   }
 }
 
-void readEncoderD() {  //Tout est dans le nom
+void readEncoderD() {
   motorR.readEncoder();
 }
 void readEncoderG() {
