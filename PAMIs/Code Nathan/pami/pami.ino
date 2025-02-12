@@ -49,6 +49,12 @@ void setup() {
 
 void loop() {
     robot.updateAll();
-    delay(50);
-    // TODO Implement a way to stop the robot
+    if (Serial.available()) {
+        char c = Serial.read();
+        if (c == 's') {
+            robot.stop();
+        }
+    }
+    // TODO: Add manual control
+    delay(10);
 }
