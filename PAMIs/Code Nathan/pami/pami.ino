@@ -50,5 +50,5 @@ void setup() {
 void loop() {
     robot.updateAll();
     delay(50);
-    // TODO 
+    // TODO Implement a way to stop the robot
 }

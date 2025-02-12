@@ -128,6 +128,10 @@ public:
             state = RobotState::NAVIGATING;
         }
     }
+
+    void stop() {
+        state = RobotState::STOPPED;
+    }
 };
 
 #endif // ROBOT_H
