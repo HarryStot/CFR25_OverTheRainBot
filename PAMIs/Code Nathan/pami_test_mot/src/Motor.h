@@ -39,6 +39,11 @@ public:
         }
     }
 
+    void getDirection(bool &enabled, bool &direction) const {
+        enabled = this->enabled;
+        direction = this->direction;
+    }
+
     void update() override {
         // TODO Implement motor control with PWM
         analogWrite(pinPWM, speed);
