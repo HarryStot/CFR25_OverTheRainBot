@@ -10,13 +10,16 @@ private:
     Encoder encoder;
 
 public:
-    Wheel(String name) : Component(name), motor(name + "_Motor"), encoder(name + "_Encoder") {}
+    Wheel(String name, int pinA, int pinB, int pinPWM) : Component(name), motor(name + "_Motor", pinA, pinB, pinPWM), encoder(name + "_Encoder") {
+        motor.setSpeed(0);
+        motor.setDirection(false, false);
+    }
 
     // TODO Change code
     void setSpeed(int speed) { motor.setSpeed(speed); }
     int getSpeed() const { return motor.getSpeed(); }
 
-    void updateEncoder(bool a, bool b) { encoder.update(a, b); }
+    void updateEncoder(bool a, bool b) { encoder.update_count(a, b); }
     int getEncoderValue() const { return encoder.getTicks(); }
 
     void resetEncoder() { encoder.reset(); }
