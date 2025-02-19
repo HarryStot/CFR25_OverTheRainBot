@@ -2,7 +2,6 @@
 #include "Odometry.h"
 #include <stdint.h>
 #include <VARSTEP_ultrasonic.h>
-//test
 
 #define ENCAD 19  //Encodeur A du moteur droit
 #define ENCBD 18  //Encodeur B du moteur droit
