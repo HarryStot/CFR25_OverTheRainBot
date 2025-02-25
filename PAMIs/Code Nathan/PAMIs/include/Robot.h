@@ -20,6 +20,8 @@ private:
     RobotState state;
     double obstacleThreshold = 20.0; // Stop if closer than 20 cm
     unsigned long taskStartTime = 0; // For non-blocking task execution
+    unsigned long maxTime = 100000; // 100 sec
+    unsigned long startTime = 0; // For time measurement
 
 public:
     Robot(double wheel_radius, double wheel_base)
@@ -131,6 +133,18 @@ public:
 
     void stop() {
         state = RobotState::STOPPED;
+    }
+
+    unsigned long getMaxTime() {
+        return maxTime;
+    }
+
+    unsigned long getStartTime() {
+        return startTime;
+    }
+
+    void setStartTime(unsigned time) {
+        startTime = time;
     }
 };
 

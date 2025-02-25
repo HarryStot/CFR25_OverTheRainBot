@@ -10,8 +10,10 @@
             "includePath": [
                 "C:/Users/natha/OneDrive/Documents/Cours/2A/CFR/CFR25_OverTheRainBot/PAMIs/Code Nathan/PAMIs/include",
                 "C:/Users/natha/OneDrive/Documents/Cours/2A/CFR/CFR25_OverTheRainBot/PAMIs/Code Nathan/PAMIs/src",
+                "C:/Users/natha/OneDrive/Documents/Cours/2A/CFR/CFR25_OverTheRainBot/PAMIs/Code Nathan/PAMIs/.pio/libdeps/nanoatmega328/LinkedList",
                 "C:/Users/natha/.platformio/packages/framework-arduino-avr/cores/arduino",
                 "C:/Users/natha/.platformio/packages/framework-arduino-avr/variants/eightanaloginputs",
+                "C:/Users/natha/OneDrive/Documents/Cours/2A/CFR/CFR25_OverTheRainBot/PAMIs/Code Nathan/PAMIs/.pio/libdeps/nanoatmega328/Unity/src",
                 "C:/Users/natha/.platformio/packages/framework-arduino-avr/libraries/EEPROM/src",
                 "C:/Users/natha/.platformio/packages/framework-arduino-avr/libraries/HID/src",
                 "C:/Users/natha/.platformio/packages/framework-arduino-avr/libraries/SPI/src",
@@ -24,8 +26,10 @@
                 "path": [
                     "C:/Users/natha/OneDrive/Documents/Cours/2A/CFR/CFR25_OverTheRainBot/PAMIs/Code Nathan/PAMIs/include",
                     "C:/Users/natha/OneDrive/Documents/Cours/2A/CFR/CFR25_OverTheRainBot/PAMIs/Code Nathan/PAMIs/src",
+                    "C:/Users/natha/OneDrive/Documents/Cours/2A/CFR/CFR25_OverTheRainBot/PAMIs/Code Nathan/PAMIs/.pio/libdeps/nanoatmega328/LinkedList",
                     "C:/Users/natha/.platformio/packages/framework-arduino-avr/cores/arduino",
                     "C:/Users/natha/.platformio/packages/framework-arduino-avr/variants/eightanaloginputs",
+                    "C:/Users/natha/OneDrive/Documents/Cours/2A/CFR/CFR25_OverTheRainBot/PAMIs/Code Nathan/PAMIs/.pio/libdeps/nanoatmega328/Unity/src",
                     "C:/Users/natha/.platformio/packages/framework-arduino-avr/libraries/EEPROM/src",
                     "C:/Users/natha/.platformio/packages/framework-arduino-avr/libraries/HID/src",
                     "C:/Users/natha/.platformio/packages/framework-arduino-avr/libraries/SPI/src",
