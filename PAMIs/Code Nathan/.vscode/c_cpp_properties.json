@@ -4,7 +4,8 @@
             "name": "Win32",
             "includePath": [
                 "${workspaceFolder}/**",
-                "C:/Program Files (x86)/Arduino/hardware/**"
+                "C:/Program Files (x86)/Arduino/hardware/**",
+                "C:/Users/natha/OneDrive/Documents/Arduino/libraries/**"
             ],
             "defines": [
                 "_DEBUG",
