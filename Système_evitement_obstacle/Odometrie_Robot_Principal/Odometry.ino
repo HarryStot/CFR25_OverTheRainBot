@@ -13,9 +13,6 @@
 #define PWMG 3    //Control moteur gauche
 #define DIRG 12   //Gérer le sens de rotation du moteur gauche
 
-#define trigger_pin 8 //capteur
-#define echo_pin 9 //capteur
-
 Motor motorR(ENCAD, ENCBD, PWMD, DIRD);
 Motor motorL(ENCAG, ENCBG, PWMG, DIRG);
 
@@ -42,7 +39,6 @@ float x_goal, y_goal;
 int i_goal = 0;
 
 Odometry robot(L, r);
-VARSTEP_ultrasonic my_HCSR04(trigger_pin, echo_pin);
 
 enum StateType { DEPART, NAVIGATION, EVITEMENT, STOP };
 StateType State = DEPART;
@@ -69,7 +65,6 @@ void loop() {
   Serial.println(State);
   Serial.println(dist);
   
-  //dist = my_HCSR04.distance_cm();
   dist = 999;
   posR = -motorR.pos;
   posL = motorL.pos;
