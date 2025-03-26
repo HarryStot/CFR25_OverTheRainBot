@@ -1,20 +1,18 @@
+#ifndef MOTOR_CONTROL_H
+#define MOTOR_CONTROL_H
+
 #include <Arduino.h>
 
 class Motor {
 private:
-  float u;
-  byte pwm;
-  byte enca;
-  byte encb;
-  byte dir;
-
+    byte enca, encb, pwm, dir;
 public:
-  volatile int pos;
+    volatile int pos;
 
-  Motor() {}  //Ne pas utiliser
-  Motor(byte enca, byte encb, byte pwm, byte dir);
-
-  void init();
-  void setMotorSpeed(int phi);
-  void readEncoder();
+    Motor(byte enca, byte encb, byte pwm, byte dir);
+    void init();
+    void setMotorSpeed(int phi);
+    void readEncoder();
 };
+
+#endif
