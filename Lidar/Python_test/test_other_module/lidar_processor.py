@@ -1,4 +1,4 @@
-from pyrplidar import PyRPlidar
+from rplidar import RPLidar
 import numpy as np
 import threading
 import time
@@ -7,18 +7,21 @@ from collections import defaultdict
 
 
 class LidarProcessor:
-    def __init__(self, port='/dev/ttyUSB0'):
-        self.lidar = PyRPlidar()
-        self.lidar.connect(port=port)
-        self.lidar.set_motor_pwm(500)
+    def __init__(self, port='/dev/ttyUSB2'):
+        self.lidar = RPLidar(port)
+        self._set_motor_speed(500)  # Start the motor
 
         self.scan_data = []
         self.obstacles_raw = []  # List of (x,y) coordinates detected by lidar
         self.obstacles = []  # List of (x,y,r) obstacles detected by lidar
-        self.robot_height = 0.35  # FIXME Height of robot in meters
+        self.robot_height = 0.35
         self.lock = threading.Lock()
         self.running = False
         self.scan_thread = None
+
+    def _set_motor_speed(self, speed):
+        # RPLidar uses _set_pwm instead of set_motor_pwm
+        self.lidar._set_pwm(speed)
 
     def start_scanning(self):
         """Start lidar scanning in a separate thread"""
@@ -29,53 +32,51 @@ class LidarProcessor:
 
     def _scan_loop(self):
         """Continuous scanning loop"""
-        self.lidar.start_scan()
+        try:
+            # In rplidar, we use iter_scans instead of start_scan
+            scan_iterator = self.lidar.iter_scans()
 
-        while self.running:
-            try:
-                print("Starting standard scan...")
-                scan = self.lidar.start_scan()
-            except Exception as e:
-                print(f"Error starting standard scan: {e}")
+            while self.running:
                 try:
-                    print("Trying force scan...")
-                    scan = self.lidar.force_scan()
+                    # Get next scan frame
+                    scan = next(scan_iterator)
+                    with self.lock:
+                        self.scan_data = scan
+                        self.process_scan_data()
+                    time.sleep(0.1)
+                except StopIteration:
+                    print("Scan iteration ended")
+                    break
                 except Exception as e:
-                    print(f"Error starting force scan: {e}")
-                    self.lidar.stop()
-                    self.lidar.set_motor_pwm(0)
-                    self.lidar.disconnect()
-                    return
-            # scan = self.lidar.get_measurements()  # FIXME get_measurements() is not a function in PyRPLidar
-            with self.lock:
-                self.scan_data = scan
-                self.process_scan_data()
-
-            time.sleep(0.1)  # TODO Adjust as needed
+                    print(f"Error during scanning: {e}")
+                    break
+        except Exception as e:
+            print(f"Error setting up scan iterator: {e}")
+        finally:
+            if self.running:
+                print("Scan loop ended")
 
     def process_scan_data(self):
         """Process scan data to identify obstacles_raw"""
         obstacles_raw = []
         for measurement in self.scan_data:
-            # Extract distance and angle
-            distance = measurement.distance / 1000.0  # Convert to meters
-            angle = measurement.angle
+            # RPLidar format: (quality, angle, distance)
+            quality = measurement[0]
+            angle = measurement[1]
+            distance = measurement[2] / 1000.0  # Convert to meters
 
-            # Convert to Cartesian coordinates (robot as origin)
-            x = distance * np.cos(np.radians(angle))
-            y = distance * np.sin(np.radians(angle))
-
-            # Add to obstacles_raw list if it's at robot height
-            # You may need to filter based on your specific setup
-            obstacles_raw.append((x, y))
+            # Filter out low-quality measurements if needed
+            if quality > 10:  # Adjust threshold as needed
+                # Convert to Cartesian coordinates (robot as origin)
+                x = distance * np.cos(np.radians(angle))
+                y = distance * np.sin(np.radians(angle))
+                obstacles_raw.append((x, y))
 
         # Update obstacles_raw list
         self.obstacles_raw = obstacles_raw
 
     def process_obstacles(self):
-        """Process raw obstacles to filter obstacles and determine their centers and radius
-        :return: List of tuples (center_x, center_y, radius) for each detected obstacle
-        """
+        """Process raw obstacles to filter obstacles and determine their centers and radius"""
         if not self.obstacles_raw or len(self.obstacles_raw) < 3:
             return []
 
@@ -83,8 +84,6 @@ class LidarProcessor:
         points = np.array(self.obstacles_raw)
 
         # Use DBSCAN to cluster points belonging to the same obstacle
-        # eps is the maximum distance between samples (adjust based on your scale)
-        # min_samples is the number of samples in a neighborhood for a point to be a core point
         clustering = DBSCAN(eps=0.1, min_samples=3).fit(points)
 
         # Get labels for each point (-1 means noise)
@@ -113,12 +112,12 @@ class LidarProcessor:
             # Add a small buffer to the radius for safety
             radius += 0.05
 
-            # Simple outlier rejection - if the radius is too large relative to the number of points,
-            # it might be a noise cluster or multiple merged obstacles
+            # Simple outlier rejection
             if radius < 0.5:  # Maximum expected obstacle radius
                 obstacles.append((center_x, center_y, radius))
 
         self.obstacles = obstacles
+        return obstacles
 
     def get_obstacles_raw(self):
         """Return the current list of detected obstacles"""
@@ -130,6 +129,6 @@ class LidarProcessor:
         self.running = False
         if self.scan_thread:
             self.scan_thread.join(timeout=1.0)
-        self.lidar.set_motor_pwm(0)
+        self._set_motor_speed(0)  # Stop motor
         self.lidar.stop()
         self.lidar.disconnect()

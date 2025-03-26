@@ -9,7 +9,7 @@ def lidar_live_plot():
     # Connect to LIDAR
     lidar = PyRPlidar()
     try:
-        lidar.connect(port="COM3", baudrate=256000, timeout=3)
+        lidar.connect(port="/dev/ttyUSB0")
         print("Connected to LIDAR")
     except Exception as e:
         print(f"Error connecting to LIDAR: {e}")

@@ -4,7 +4,7 @@ import time
 
 def simple_scan():
     lidar = PyRPlidar()
-    lidar.connect(port="COM3", baudrate=256000, timeout=3)
+    lidar.connect(port="COM4")
     # Linux   : "/dev/ttyUSB0"
     # MacOS   : "/dev/cu.SLAB_USBtoUART"
     # Windows : "COM5"
