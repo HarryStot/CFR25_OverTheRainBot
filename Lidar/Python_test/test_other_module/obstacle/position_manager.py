@@ -14,7 +14,7 @@ class PositionManager:
         # Robot position
         self._pos_x = 150
         self._pos_y = 100
-        self._pos_z = 0  # Orientation in degrees
+        self._pos_z = 90  # Orientation in degrees
         # Target position
         self._targ_x = 200
         self._targ_y = 100

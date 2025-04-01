@@ -61,7 +61,7 @@ class LidarThread(threading.Thread):
         # Add new points to buffer with timestamp
         for _, angle, distance in scan:
             if distance > 0:
-                radians = (posZ - angle - offsetAngle) * pi / 180.0 # Convert to radians
+                radians = (posZ - angle - offsetAngle) * pi / 180.0  # Convert to radians
                 x = distance * 0.1 * cos(radians) + posX
                 y = distance * 0.1 * sin(radians) + posY
                 if 0 <= x <= 300 and 0 <= y <= 200:
@@ -82,7 +82,7 @@ class LidarThread(threading.Thread):
             logger.debug(f"Insufficient points: {len(self.accumulated_points)}")
             return []
 
-        logger.info(f"Number of accumulated points: {len(self.accumulated_points)}")
+        # logger.info(f"Number of accumulated points: {len(self.accumulated_points)}")
 
         # Extract just the x,y coordinates for DBSCAN
         points_array = np.array([[p[0], p[1]] for p in self.accumulated_points])
@@ -100,7 +100,7 @@ class LidarThread(threading.Thread):
 
         n_clusters = len(unique_labels) - (1 if -1 in unique_labels else 0)
         n_noise = list(labels).count(-1)
-        logger.info(f"Clusters found: {n_clusters}, noise points: {n_noise}")
+        # logger.info(f"Clusters found: {n_clusters}, noise points: {n_noise}")
 
         for label in unique_labels:
             if label == -1:
@@ -120,8 +120,8 @@ class LidarThread(threading.Thread):
 
             obstacles.append((center_x, center_y, width, height))
 
-            logger.info(f"Obstacle detected: center=({center_x:.1f}, {center_y:.1f}), "
-                        f"size=({width:.1f}, {height:.1f})")
+            # logger.info(f"Obstacle detected: center=({center_x:.1f}, {center_y:.1f}), "
+            #             f"size=({width:.1f}, {height:.1f})")
 
         return obstacles
 
@@ -215,8 +215,28 @@ class LidarThread(threading.Thread):
                         img = cv2.circle(img, (int(minX * affCoef), int((200 - minY) * affCoef)),
                                          alertDist * affCoef, (0, 0, 255), 1)
 
+                        # Draw line to target
+                        radians = posZ * pi / 180.0
+                        cv2.line(img, (int(posX * affCoef), int((200 - posY) * affCoef)),
+                                 (int(targX * affCoef), int((200 - targY) * affCoef)), (0, 255, 255), 2)
+                        cv2.line(img, (int(posX * affCoef), int((200 - posY) * affCoef)),
+                                 (int((posX + affSize * cos(radians)) * affCoef),
+                                  int((200 - (posY + affSize * sin(radians))) * affCoef)), (255, 0, 0), 2)
+
+                        # Draw all obstacles
+                        if obstacles:
+                            for (center_x, center_y, width, height) in obstacles:
+                                cv2.rectangle(img,
+                                              (int((center_x - width / 2) * affCoef),
+                                               int((200 - (center_y + height / 2)) * affCoef)),
+                                              (int((center_x + width / 2) * affCoef),
+                                               int((200 - (center_y - height / 2)) * affCoef)),
+                                              (255, 0, 0), 1)
+
+                        cv2.imshow('frame', img)
+                        cv2.waitKey(1)
+
                     if minDistance < alertDist and runningMatch and not debug:
-                        # logger.info('Obstacle detected - Emergency stop')
                         if hasattr(self, 'serial_port') and hasattr(self.serial_port, 'write'):
                             self.serial_port.write("0\r\n".encode())
                         self.stop_event.set()
@@ -228,29 +248,6 @@ class LidarThread(threading.Thread):
                                 self.serial_port.write("\r\n".encode())
                             self.stop_event.clear()
 
-                    radians = posZ * pi / 180.0
-
-                    if self.debugCV:
-                        cv2.line(img, (int(posX * affCoef), int((200 - posY) * affCoef)),
-                                 (int(targX * affCoef), int((200 - targY) * affCoef)), (0, 255, 255), 2)
-                        cv2.line(img, (int(posX * affCoef), int((200 - posY) * affCoef)),
-                                 (int((posX + affSize * cos(radians)) * affCoef),
-                                  int((200 - (posY + affSize * sin(radians))) * affCoef)), (255, 0, 0), 2)
-                        cv2.imshow('frame', img)
-                        cv2.waitKey(1)
-
-                    if self.debugCV and obstacles:
-                        for center_x, center_y, width, height in obstacles:
-                            # Dessiner un rectangle autour de l'obstacle
-                            top_left = (
-                                int((center_x - width / 2) * affCoef), int((200 - (center_y + height / 2)) * affCoef))
-                            bottom_right = (
-                                int((center_x + width / 2) * affCoef), int((200 - (center_y - height / 2)) * affCoef))
-                            cv2.rectangle(img, top_left, bottom_right, (255, 0, 255), 2)
-
-                            # Marquer le centre de l'obstacle
-                            cv2.circle(img, (int(center_x * affCoef), int((200 - center_y) * affCoef)),
-                                       2, (255, 255, 255), -1)
                 else:
                     break
 
@@ -262,15 +259,16 @@ class LidarThread(threading.Thread):
             self.stop_lidar()
 
     def stop_lidar(self):
-        """Safely stop the lidar"""
+        """Stop the lidar and clean up resources"""
         if self.lidar:
             try:
+                logger.info("Stopping LIDAR")
                 self.lidar.stop()
-                self.lidar.stop_motor()
                 self.lidar.disconnect()
-                logger.info("Lidar stopped and disconnected")
             except Exception as e:
-                logger.error(f"Error stopping lidar: {e}")
+                logger.error(f"Error stopping LIDAR: {e}")
+        else:
+            logger.warning("LIDAR not initialized, nothing to stop")
 
 
 def main():

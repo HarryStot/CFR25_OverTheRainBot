@@ -39,7 +39,7 @@ def main():
         robot_interface = RobotInterface(serial_port='/dev/pts/3', baud_rate=115200,
                                          stop_event=interface_stop_event)
         robot_interface.start()
-        logger.info("RobotInterface démarré")
+        logger.info("Starting RobotInterface...")
 
         # Wait for the interface to connect
         time.sleep(1)
@@ -77,7 +77,7 @@ def main():
             logger.info("Waiting the end of LidarThread...")
             lidar_thread.join(timeout=5)
 
-        logger.info("Programme terminé")
+        logger.info("Goodbye!")
 
 
 if __name__ == '__main__':
