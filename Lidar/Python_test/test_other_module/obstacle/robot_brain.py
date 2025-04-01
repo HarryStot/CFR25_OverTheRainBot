@@ -76,7 +76,7 @@ class RobotBrain(threading.Thread):
 
         # Navigation parameters
         self.position_tolerance = 5.0  # How close the robot needs to be to consider it at the target
-        self.orientation_tolerance = 10.0  # Degrees
+        self.orientation_tolerance = 2.0  # Degrees
         self.obstacle_detected = False
         self.navigation_timeout = 60  # seconds
         self.navigation_start_time = 0

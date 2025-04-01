@@ -61,19 +61,19 @@ def main():
 
         # Set up a demo mission with locations and tasks
         location1 = Location("Starting Point", 100, 100, 90, [
-            Task("Calibrate Sensors", "CALIBRATE", completion_time=3),
-            Task("Take Initial Reading", "READ", {"S": 1}, completion_time=2)
+            # Task("Calibrate Sensors", "CALIBRATE", completion_time=3),
+            # Task("Take Initial Reading", "READ", {"S": 1}, completion_time=2)
         ])
 
         location2 = Location("Checkpoint 1", 150, 150, 45, [
-            Task("Take Photo", "PHOTO", completion_time=1),
-            Task("Analyze Environment", "ANALYZE", completion_time=5)
+            # Task("Take Photo", "PHOTO", completion_time=1),
+            # Task("Analyze Environment", "ANALYZE", completion_time=5)
         ])
 
         location3 = Location("Destination", 200, 100, 0, [
-            Task("Collect Sample", "COLLECT", completion_time=10),
-            Task("Perform Analysis", "ANALYZE", {"M": 2}, completion_time=8),
-            Task("Report Results", "REPORT", completion_time=2)
+            # Task("Collect Sample", "COLLECT", completion_time=10),
+            # Task("Perform Analysis", "ANALYZE", {"M": 2}, completion_time=8),
+            # Task("Report Results", "REPORT", completion_time=2)
         ])
 
         # Add locations to the mission
