@@ -35,7 +35,7 @@ class PositionManager:
     def get_velocity(self):
         """Get current velocity"""
         with self._lock:
-            return self._velocity
+            return str(self._velocity)
 
     # Setters
     def set_position(self, x, y, z=None):
@@ -53,6 +53,12 @@ class PositionManager:
             self._targ_x = x
             self._targ_y = y
             logger.debug(f"Target updated: ({x}, {y})")
+
+    def set_velocity(self, velocity):
+        """Set current velocity"""
+        with self._lock:
+            self._velocity = velocity
+            logger.debug(f"Velocity updated: {velocity}")
 
 
 # Create a singleton instance
