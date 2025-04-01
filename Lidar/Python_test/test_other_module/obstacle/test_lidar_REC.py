@@ -257,6 +257,8 @@ class LidarThread(threading.Thread):
             logger.error(f"Error in LidarThread: {e}")
         finally:
             self.stop_lidar()
+            if self.debugCV:
+                cv2.destroyAllWindows()
 
     def stop_lidar(self):
         """Stop the lidar and clean up resources"""

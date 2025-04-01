@@ -149,9 +149,15 @@ def main():
         if robot_brain and robot_brain.is_alive():
             logger.info("Waiting for RobotBrain to end...")
             robot_brain.join(timeout=5)
+            
+        # Join the obstacle update thread if needed
+        if obstacle_thread.is_alive():
+            logger.info("Waiting for obstacle_thread to end...")
+            obstacle_thread.join(timeout=2)
 
         logger.info("Goodbye!")
 
 
 if __name__ == '__main__':
     main()
+
