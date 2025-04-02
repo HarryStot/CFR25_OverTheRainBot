@@ -39,7 +39,7 @@ def main():
 
     try:
         # Start the robot interface
-        robot_interface = RobotInterface(serial_port='/dev/pts/3', baud_rate=115200,
+        robot_interface = RobotInterface(serial_port='/dev/ttyACM0', baud_rate=115200,
                                          stop_event=interface_stop_event)
         robot_interface.start()
         logger.info("Starting RobotInterface...")
@@ -54,8 +54,8 @@ def main():
 
         # Start the robot brain
         robot_brain = RobotBrain(
-            movement_port='/dev/pts/3',  # Same as robot interface
-            action_port='/dev/pts/4',  # For action commands
+            movement_port='/dev/ttyACM0',  # Same as robot interface
+            action_port=None,  # For action commands
             stop_event=brain_stop_event
         )
 

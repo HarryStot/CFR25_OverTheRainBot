@@ -49,7 +49,7 @@ class RobotBrain(threading.Thread):
     """Main controller for the robot behavior"""
 
     def __init__(self,
-                 movement_port='/dev/pts/3',
+                 movement_port='/dev/ttyACM0',
                  action_port='/dev/pts/4',
                  baud_rate=115200,
                  stop_event=None):
@@ -65,7 +65,7 @@ class RobotBrain(threading.Thread):
         self.action_ser = None
 
         # State machine variables
-        self.current_state = RobotState.IDLE
+        self.current_state = RobotState.NAVIGATING
         self.previous_state = None
         self.state_changed = threading.Event()
 
@@ -268,9 +268,13 @@ class RobotBrain(threading.Thread):
             # Connect to serial ports
             logger.info(f"Connecting to movement port {self.movement_port} at {self.baud_rate} baud")
             self.movement_ser = serial.Serial(self.movement_port, self.baud_rate, timeout=1)
+            if not self.movement_ser.is_open:
+                logger.error(f"Failed to open movement port {self.movement_port}")
 
             logger.info(f"Connecting to action port {self.action_port} at {self.baud_rate} baud")
             self.action_ser = serial.Serial(self.action_port, self.baud_rate, timeout=1)
+            if not self.action_ser.is_open:
+                logger.error(f"Failed to open action port {self.action_port}")
 
             time.sleep(2)  # Wait for connections to stabilize
 

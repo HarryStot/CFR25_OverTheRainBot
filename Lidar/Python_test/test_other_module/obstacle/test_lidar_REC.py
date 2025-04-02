@@ -56,7 +56,7 @@ class LidarThread(threading.Thread):
             self.accumulated_points = []
             self.last_clear_time = current_time
             self.last_position = position_data
-            logger.info(f"Point buffer refreshed. Position: {position_data}")
+            # logger.info(f"Point buffer refreshed. Position: {position_data}")
 
         # Add new points to buffer with timestamp
         for _, angle, distance in scan:
@@ -241,8 +241,9 @@ class LidarThread(threading.Thread):
                             self.serial_port.write("0\r\n".encode())
                         self.stop_event.set()
                     else:
+                        # TODO: Remove
                         if self.stop_event.is_set():
-                            logger.info(f'Resuming with last velocity: {lastV}')
+                            # logger.info(f'Resuming with last velocity: {lastV}')
                             if hasattr(self, 'serial_port') and hasattr(self.serial_port, 'write'):
                                 self.serial_port.write(lastV.encode())
                                 self.serial_port.write("\r\n".encode())
@@ -265,6 +266,7 @@ class LidarThread(threading.Thread):
         if self.lidar:
             try:
                 logger.info("Stopping LIDAR")
+                self.lidar.stop_motor()
                 self.lidar.stop()
                 self.lidar.disconnect()
             except Exception as e:

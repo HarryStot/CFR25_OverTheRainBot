@@ -1,331 +1,191 @@
-/**
- * Robot Movement Control and Position Reporting Arduino
+/*
+ * Motor Control Simulation with Position Feedback
+ * This sketch simulates an Arduino controlling a motor and providing position feedback
+ * via serial communication without actually connecting to hardware.
  *
- * This Arduino handles:
- * 1. Receiving GX,Y,Z movement commands
- * 2. Controlling the robot's movement
- * 3. Reporting the current position via "POS,x,y,z,targetX,targetY" format
+ * Commands:
+ * GX25,Y84,Z41 - Go to position X=25, Y=84, Z=41 (where Z is theta/angle)
+ * S - Stop all motors
+ * V42 - Set velocity to 42 (range 0-255)
  */
 
-#include <Servo.h>
+// Constants
+const int MAX_VELOCITY = 255;     // Maximum velocity value
+const int UPDATE_INTERVAL = 100;  // Update position every 100ms
 
-// Pin definitions
-const int LEFT_MOTOR_PIN = 9;
-const int RIGHT_MOTOR_PIN = 10;
-const int ENCODER_LEFT_A = 2;
-const int ENCODER_LEFT_B = 3;
-const int ENCODER_RIGHT_A = 4;
-const int ENCODER_RIGHT_B = 5;
+// Variables for X, Y positions and Z angle
+float currentX = 0.0;
+float currentY = 0.0;
+float currentZ = 0.0;  // Z represents theta (angle)
 
-// Motor control
-Servo leftMotor;
-Servo rightMotor;
+float targetX = 0.0;
+float targetY = 0.0;
+float targetZ = 0.0;
 
-// Position tracking
-float posX = 150.0;     // Current X position (cm)
-float posY = 100.0;     // Current Y position (cm)
-float orientation = 90.0; // Current orientation (degrees)
-float targetX = 150.0;  // Target X position
-float targetY = 100.0;  // Target Y position
-
-// Movement parameters
-const float WHEEL_RADIUS = 3.0;    // Wheel radius in cm
-const float WHEEL_BASE = 15.0;     // Distance between wheels in cm
-const float ENCODER_TICKS_PER_REV = 1440.0; // Encoder ticks per wheel revolution
-const float MAX_SPEED = 30.0;      // Maximum speed in cm/s
-const float MAX_TURN_RATE = 90.0;  // Maximum turn rate in degrees/s
-const float POSITION_TOLERANCE = 3.0; // Position tolerance in cm
-const float ORIENTATION_TOLERANCE = 5.0; // Orientation tolerance in degrees
-
-// Encoder counters
-volatile long leftEncoderCount = 0;
-volatile long rightEncoderCount = 0;
-long prevLeftCount = 0;
-long prevRightCount = 0;
-
-// Timing variables
-unsigned long lastUpdateTime = 0;
-unsigned long lastReportTime = 0;
-const unsigned long UPDATE_INTERVAL = 50;     // Motion update interval (ms)
-const unsigned long POSITION_REPORT_INTERVAL = 200; // Position report interval (ms)
-
-// Command processing
-String inputBuffer = "";
-bool commandComplete = false;
-
-// Movement state
+int velocity = 50;  // Default velocity (range 0-255)
 bool isMoving = false;
-unsigned long movementStartTime = 0;
-const unsigned long MOVEMENT_TIMEOUT = 10000; // 10 seconds
+
+unsigned long lastUpdateTime = 0;
 
 void setup() {
   // Initialize serial communication
   Serial.begin(115200);
-
-  // Initialize motor control
-  leftMotor.attach(LEFT_MOTOR_PIN);
-  rightMotor.attach(RIGHT_MOTOR_PIN);
-  stopMotors();
-
-  // Set up encoder interrupts
-  pinMode(ENCODER_LEFT_A, INPUT_PULLUP);
-  pinMode(ENCODER_LEFT_B, INPUT_PULLUP);
-  pinMode(ENCODER_RIGHT_A, INPUT_PULLUP);
-  pinMode(ENCODER_RIGHT_B, INPUT_PULLUP);
-
-  attachInterrupt(digitalPinToInterrupt(ENCODER_LEFT_A), updateLeftEncoder, CHANGE);
-  attachInterrupt(digitalPinToInterrupt(ENCODER_RIGHT_A), updateRightEncoder, CHANGE);
-
-  // Initial position report
-  reportPosition();
-
-  Serial.println("Movement controller initialized");
+  Serial.println("Motor Control Simulation Started");
+  Serial.println("Commands:");
+  Serial.println("  GX25,Y84,Z41 - Go to position X=25, Y=84, Z=41 (angle)");
+  Serial.println("  S - Stop all motors");
+  Serial.println("  V42 - Set velocity to 42 (range 0-255)");
+  Serial.println("  P - Request current position");
 }
 
 void loop() {
-  // Check for new commands
-  handleSerialInput();
+  // Check for serial commands
+  if (Serial.available() > 0) {
+    String command = Serial.readStringUntil('\n');
+    processCommand(command);
+  }
 
-  // Update position based on encoder feedback
+  // Update position based on movement towards target
   unsigned long currentTime = millis();
-  if (currentTime - lastUpdateTime >= UPDATE_INTERVAL) {
+  if (isMoving && (currentTime - lastUpdateTime >= UPDATE_INTERVAL)) {
     updatePosition();
+    sendPositionFeedback();
     lastUpdateTime = currentTime;
   }
 
-  // Periodically report position
-  if (currentTime - lastReportTime >= POSITION_REPORT_INTERVAL) {
-    reportPosition();
-    lastReportTime = currentTime;
-  }
-
-  // Update movement
-  if (isMoving) {
-    updateMovement();
-
-    // Check for movement timeout
-    if (currentTime - movementStartTime > MOVEMENT_TIMEOUT) {
-      Serial.println("Movement timeout");
-      stopMotors();
-      isMoving = false;
-    }
-  }
-}
-
-void updateLeftEncoder() {
-  // Update left encoder count based on quadrature encoding
-  int a = digitalRead(ENCODER_LEFT_A);
-  int b = digitalRead(ENCODER_LEFT_B);
-
-  if (a == b) {
-    leftEncoderCount++;
-  } else {
-    leftEncoderCount--;
-  }
-}
-
-void updateRightEncoder() {
-  // Update right encoder count based on quadrature encoding
-  int a = digitalRead(ENCODER_RIGHT_A);
-  int b = digitalRead(ENCODER_RIGHT_B);
-
-  if (a != b) {
-    rightEncoderCount++;
-  } else {
-    rightEncoderCount--;
-  }
-}
-
-void updatePosition() {
-  // Calculate wheel movement since last update
-  long deltaLeft = leftEncoderCount - prevLeftCount;
-  long deltaRight = rightEncoderCount - prevRightCount;
-  prevLeftCount = leftEncoderCount;
-  prevRightCount = rightEncoderCount;
-
-  // Convert encoder ticks to distance
-  float leftDistance = (deltaLeft / ENCODER_TICKS_PER_REV) * (2.0 * PI * WHEEL_RADIUS);
-  float rightDistance = (deltaRight / ENCODER_TICKS_PER_REV) * (2.0 * PI * WHEEL_RADIUS);
-
-  // Calculate robot movement
-  float distanceMoved = (leftDistance + rightDistance) / 2.0;
-  float angleTurned = (rightDistance - leftDistance) / WHEEL_BASE * (180.0 / PI);
-
-  // Update position and orientation
-  orientation += angleTurned;
-
-  // Normalize orientation to 0-360
-  while (orientation < 0) orientation += 360.0;
-  while (orientation >= 360.0) orientation -= 360.0;
-
-  // Update position based on orientation
-  float radians = orientation * PI / 180.0;
-  posX += distanceMoved * cos(radians);
-  posY += distanceMoved * sin(radians);
-}
-
-void updateMovement() {
-  // Calculate distance to target
-  float dx = targetX - posX;
-  float dy = targetY - posY;
-  float distanceToTarget = sqrt(dx*dx + dy*dy);
-
-  // Calculate desired heading
-  float desiredHeading = atan2(dy, dx) * 180.0 / PI;
-
-  // Normalize to 0-360
-  while (desiredHeading < 0) desiredHeading += 360.0;
-  while (desiredHeading >= 360.0) desiredHeading -= 360.0;
-
-  // Calculate heading error
-  float headingError = desiredHeading - orientation;
-
-  // Normalize heading error to -180 to +180
-  if (headingError > 180.0) headingError -= 360.0;
-  if (headingError < -180.0) headingError += 360.0;
-
-  // Check if we've reached the target
-  if (distanceToTarget <= POSITION_TOLERANCE && abs(headingError) <= ORIENTATION_TOLERANCE) {
-    stopMotors();
-    isMoving = false;
-    Serial.println("Target reached");
-    return;
-  }
-
-  // Determine if we need to turn or move forward
-  float leftSpeed = 0;
-  float rightSpeed = 0;
-
-  if (abs(headingError) > ORIENTATION_TOLERANCE) {
-    // Turn to face the target
-    float turnRate = constrain(headingError, -MAX_TURN_RATE, MAX_TURN_RATE);
-    leftSpeed = -turnRate * 0.5;
-    rightSpeed = turnRate * 0.5;
-  } else {
-    // Move toward the target
-    float forwardSpeed = min(distanceToTarget, MAX_SPEED);
-
-    // Small adjustment for any heading error
-    float turnAdjustment = headingError * 0.5;
-
-    leftSpeed = forwardSpeed - turnAdjustment;
-    rightSpeed = forwardSpeed + turnAdjustment;
-  }
-
-  // Apply speed to motors
-  setMotorSpeeds(leftSpeed, rightSpeed);
-}
-
-void setMotorSpeeds(float leftSpeed, float rightSpeed) {
-  // Convert speeds to PWM values (90 is stopped for servos)
-  // Note: This mapping depends on your specific motor setup
-  int leftPWM = map(constrain(leftSpeed, -MAX_SPEED, MAX_SPEED), -MAX_SPEED, MAX_SPEED, 0, 180);
-  int rightPWM = map(constrain(rightSpeed, -MAX_SPEED, MAX_SPEED), -MAX_SPEED, MAX_SPEED, 180, 0);
-
-  leftMotor.write(leftPWM);
-  rightMotor.write(rightPWM);
-}
-
-void stopMotors() {
-  leftMotor.write(90);  // Stop value for servo
-  rightMotor.write(90); // Stop value for servo
-}
-
-void reportPosition() {
-  // Send position update in the format: POS,x,y,orientation,targetX,targetY
-  Serial.print("POS,");
-  Serial.print(posX);
-  Serial.print(",");
-  Serial.print(posY);
-  Serial.print(",");
-  Serial.print(orientation);
-  Serial.print(",");
-  Serial.print(targetX);
-  Serial.print(",");
-  Serial.println(targetY);
-}
-
-void handleSerialInput() {
-  while (Serial.available() > 0) {
-    char inChar = (char)Serial.read();
-
-    if (inChar == '\n' || inChar == '\r') {
-      if (inputBuffer.length() > 0) {
-        commandComplete = true;
-      }
-    } else {
-      inputBuffer += inChar;
-    }
-  }
-
-  if (commandComplete) {
-    processCommand(inputBuffer);
-    inputBuffer = "";
-    commandComplete = false;
-  }
+  // Simulate other processing
+  delay(10);  // Small delay to prevent the loop from running too fast
 }
 
 void processCommand(String command) {
-  command.trim(); // Remove any whitespace
+  if (command.length() > 0) {
+    char cmdType = command.charAt(0);
 
-  if (command.startsWith("G")) {
-    // Parse movement command: GX100,Y200,Z90
-    float newX = targetX;
-    float newY = targetY;
-    float newOrientation = orientation;
+    switch (cmdType) {
+      case 'G': // Go to position
+        parseGoToCommand(command);
+        isMoving = true;
+        Serial.println("Moving to target position");
+        break;
 
-    // Extract X coordinate if present
-    int xIndex = command.indexOf("X");
-    if (xIndex >= 0) {
-      int commaIndex = command.indexOf(",", xIndex);
-      if (commaIndex > 0) {
-        newX = command.substring(xIndex + 1, commaIndex).toFloat();
-      } else {
-        newX = command.substring(xIndex + 1).toFloat();
-      }
+      case 'S': // Stop
+        isMoving = false;
+        Serial.println("Movement stopped");
+        break;
+
+      case 'V': // Set velocity
+        if (command.length() > 1) {
+          int newVelocity = command.substring(1).toInt();
+          setVelocity(newVelocity);
+        }
+        break;
+
+      case 'P': // Request position
+        sendPositionFeedback();
+        break;
+
+      default:
+        Serial.println("Unknown command");
     }
-
-    // Extract Y coordinate if present
-    int yIndex = command.indexOf("Y");
-    if (yIndex >= 0) {
-      int commaIndex = command.indexOf(",", yIndex);
-      if (commaIndex > 0) {
-        newY = command.substring(yIndex + 1, commaIndex).toFloat();
-      } else {
-        newY = command.substring(yIndex + 1).toFloat();
-      }
-    }
-
-    // Extract Z (orientation) if present
-    int zIndex = command.indexOf("Z");
-    if (zIndex >= 0) {
-      newOrientation = command.substring(zIndex + 1).toFloat();
-    }
-
-    // Set new target
-    targetX = newX;
-    targetY = newY;
-
-    // Start moving
-    isMoving = true;
-    movementStartTime = millis();
-
-    Serial.print("Moving to X:");
-    Serial.print(targetX);
-    Serial.print(" Y:");
-    Serial.print(targetY);
-    Serial.print(" Z:");
-    Serial.println(newOrientation);
-
-  } else if (command == "STOP") {
-    // Stop movement
-    stopMotors();
-    isMoving = false;
-    Serial.println("Stopped");
-
-  } else {
-    // Unknown command
-    Serial.print("Unknown command: ");
-    Serial.println(command);
   }
+}
+
+void parseGoToCommand(String command) {
+  // Parse GX25,Y84,Z41 format
+  int xIndex = command.indexOf('X');
+  int yIndex = command.indexOf('Y');
+  int zIndex = command.indexOf('Z');
+
+  if (xIndex != -1) {
+    int nextComma = command.indexOf(',', xIndex);
+    if (nextComma == -1) nextComma = command.length();
+    targetX = command.substring(xIndex + 1, nextComma).toFloat();
+  }
+
+  if (yIndex != -1) {
+    int nextComma = command.indexOf(',', yIndex);
+    if (nextComma == -1) nextComma = command.length();
+    targetY = command.substring(yIndex + 1, nextComma).toFloat();
+  }
+
+  if (zIndex != -1) {
+    int nextComma = command.indexOf(',', zIndex);
+    if (nextComma == -1) nextComma = command.length();
+    targetZ = command.substring(zIndex + 1, nextComma).toFloat();
+    // Normalize angle between 0-360
+    targetZ = fmod(targetZ, 360);
+    if (targetZ < 0) targetZ += 360;
+  }
+
+  Serial.print("Target set to X:");
+  Serial.print(targetX);
+  Serial.print(" Y:");
+  Serial.print(targetY);
+  Serial.print(" Z:");
+  Serial.println(targetZ);
+}
+
+void setVelocity(int newVelocity) {
+  // Constrain velocity to valid range
+  velocity = constrain(newVelocity, 0, MAX_VELOCITY);
+
+  Serial.print("Velocity set to: ");
+  Serial.println(velocity);
+}
+
+void updatePosition() {
+  // Calculate maximum step size based on velocity
+  float stepSize = velocity / 50.0; // Adjust this divisor to tune movement speed
+
+  // Update X position
+  if (abs(targetX - currentX) <= stepSize) {
+    currentX = targetX;
+  } else if (currentX < targetX) {
+    currentX += stepSize;
+  } else {
+    currentX -= stepSize;
+  }
+
+  // Update Y position
+  if (abs(targetY - currentY) <= stepSize) {
+    currentY = targetY;
+  } else if (currentY < targetY) {
+    currentY += stepSize;
+  } else {
+    currentY -= stepSize;
+  }
+
+  // Update Z (theta) with special handling for angles
+  float zDiff = targetZ - currentZ;
+  // Handle shortest path around the circle
+  if (zDiff > 180) zDiff -= 360;
+  if (zDiff < -180) zDiff += 360;
+
+  if (abs(zDiff) <= stepSize) {
+    currentZ = targetZ;
+  } else if (zDiff > 0) {
+    currentZ += stepSize;
+  } else {
+    currentZ -= stepSize;
+  }
+
+  // Normalize Z angle between 0-360
+  currentZ = fmod(currentZ, 360);
+  if (currentZ < 0) currentZ += 360;
+
+  // Check if we've reached the target
+  if (currentX == targetX && currentY == targetY && currentZ == targetZ) {
+    isMoving = false;
+    Serial.println("Target position reached");
+  }
+}
+
+void sendPositionFeedback() {
+  Serial.print("POS,X:");
+  Serial.print(currentX, 1);
+  Serial.print(",Y:");
+  Serial.print(currentY, 1);
+  Serial.print(",Z:");
+  Serial.print(currentZ, 1);
+  Serial.println();
 }
