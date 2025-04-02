@@ -65,7 +65,7 @@ class RobotBrain(threading.Thread):
         self.action_ser = None
 
         # State machine variables
-        self.current_state = RobotState.NAVIGATING
+        self.current_state = RobotState.IDLE
         self.previous_state = None
         self.state_changed = threading.Event()
 
@@ -80,10 +80,11 @@ class RobotBrain(threading.Thread):
         self.obstacle_detected = False
         self.navigation_timeout = 60  # seconds
         self.navigation_start_time = 0
+        self.last_pos_cmd = None
 
         # Task execution variables
         self.task_start_time = 0
-        self.task_timeout = 300  # seconds
+        self.task_timeout = 20  # seconds
 
         # Lock for thread safety
         self.lock = threading.RLock()
@@ -177,9 +178,9 @@ class RobotBrain(threading.Thread):
                 self.send_movement_command(
                     f"GX{current_location.x},Y{current_location.y},Z{current_location.orientation}")
             else:
-                self.send_movement_command(f"GX{current_location.x},Y{current_location.y}")
+                self.send_movement_command(f"GX{current_location.x},Y{current_location.y},Z{current_z}")
 
-            logger.info(f"Navigating to {current_location.name}, distance: {distance:.2f}")
+            # logger.info(f"Navigating to {current_location.name}, distance: {distance:.2f}")
 
     def handle_executing_task_state(self):
         """Handle the EXECUTING_TASK state"""
@@ -231,6 +232,11 @@ class RobotBrain(threading.Thread):
     def send_movement_command(self, command):
         """Send a command to the movement serial port"""
         if self.movement_ser and self.movement_ser.is_open:
+            # Check if the command is a repeat
+            if command == self.last_pos_cmd:
+                logger.debug("Ignoring repeated movement command")
+                return
+            self.last_pos_cmd = command
             try:
                 full_command = f"{command}\r\n"
                 self.movement_ser.write(full_command.encode())

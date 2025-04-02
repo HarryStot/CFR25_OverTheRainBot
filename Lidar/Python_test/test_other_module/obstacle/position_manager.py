@@ -12,12 +12,12 @@ class PositionManager:
     def __init__(self):
         self._lock = threading.RLock()
         # Robot position
-        self._pos_x = 150
-        self._pos_y = 100
+        self._pos_x = 10
+        self._pos_y = 10
         self._pos_z = 90  # Orientation in degrees
         # Target position
-        self._targ_x = 200
-        self._targ_y = 100
+        self._targ_x = 150
+        self._targ_y = 180
         # Movement state
         self._velocity = 0
 
@@ -25,12 +25,12 @@ class PositionManager:
     def get_position(self):
         """Get current robot position (x, y, orientation)"""
         with self._lock:
-            return (self._pos_x, self._pos_y, self._pos_z)
+            return self._pos_x, self._pos_y, self._pos_z
 
     def get_target(self):
         """Get current target position (x, y)"""
         with self._lock:
-            return (self._targ_x, self._targ_y)
+            return self._targ_x, self._targ_y
 
     def get_velocity(self):
         """Get current velocity"""

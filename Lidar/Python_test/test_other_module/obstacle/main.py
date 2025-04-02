@@ -2,6 +2,7 @@
 
 import time
 import threading
+
 from test_lidar_REC import LidarThread
 import logging
 import signal
@@ -9,10 +10,14 @@ from position_manager import position_manager
 from robot_interface import RobotInterface
 from robot_brain import RobotBrain, Location, Task, RobotState
 
+debug = True
 # Configure logging
 logging.basicConfig(level=logging.INFO,
                     format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
+
+if debug:
+    logger.setLevel(logging.DEBUG)
 
 # Global flag for graceful shutdown
 running = True
@@ -38,6 +43,10 @@ def main():
     robot_brain = None
 
     try:
+        # Logger setup
+        logger.info("Starting main program...")
+        logger.debug("Debug mode is enabled")
+
         # Start the robot interface
         robot_interface = RobotInterface(serial_port='/dev/ttyACM0', baud_rate=115200,
                                          stop_event=interface_stop_event)
@@ -60,7 +69,7 @@ def main():
         )
 
         # Set up a demo mission with locations and tasks
-        location1 = Location("Starting Point", 100, 100, 90, [
+        location1 = Location("Starting Point", 10, 10, 90, [
             # Task("Calibrate Sensors", "CALIBRATE", completion_time=3),
             # Task("Take Initial Reading", "READ", {"S": 1}, completion_time=2)
         ])
