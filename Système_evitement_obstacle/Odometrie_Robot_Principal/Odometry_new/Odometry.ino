@@ -14,24 +14,39 @@ Motor motorR(ENCAD, ENCBD, PWMD, DIRD);
 Motor motorL(ENCAG, ENCBG, PWMG, DIRG);
 Odometry robot(0.245 / 2, 0.065 / 2);
 
+float x_goal = 0, y_goal = 0, theta_goal = 0;
+float K1 = 2;
+float eps = 0.1;
+
 void setup() {
     Serial.begin(9600);
     motorR.init();
-    attachInterrupt(digitalPinToInterrupt(ENCAD), [] { motorR.readEncoder(); }, RISING);
     motorL.init();
+    attachInterrupt(digitalPinToInterrupt(ENCAD), [] { motorR.readEncoder(); }, RISING);
     attachInterrupt(digitalPinToInterrupt(ENCAG), [] { motorL.readEncoder(); }, RISING);
 }
 
 void loop() {
     if (Serial.available()) {
         String command = Serial.readStringUntil('\n');
-        int speedR = command.substring(0, command.indexOf(',')).toInt();
-        int speedL = command.substring(command.indexOf(',') + 1).toInt();
-        motorR.setMotorSpeed(speedR);
-        motorL.setMotorSpeed(speedL);
+        int firstComma = command.indexOf(',');
+        int secondComma = command.indexOf(',', firstComma + 1);
+        x_goal = command.substring(0, firstComma).toFloat();
+        y_goal = command.substring(firstComma + 1, secondComma).toFloat();
+        theta_goal = command.substring(secondComma + 1).toFloat();
     }
 
     robot.updateOdometry(motorR.pos, motorL.pos);
+    float thetaref = atan2(y_goal - robot.y, x_goal - robot.x);
+    float w = K1 * atan2(sin(thetaref - robot.theta), cos(thetaref - robot.theta));
+    float v = (abs(thetaref - robot.theta) < eps) ? 10 : 0;
+
+    int speedR = (v + w * robot.L) / robot.r;
+    int speedL = (v - w * robot.L) / robot.r;
+
+    motorR.setMotorSpeed(speedR);
+    motorL.setMotorSpeed(speedL);
+
     Serial.print(robot.x); Serial.print(",");
     Serial.print(robot.y); Serial.print(",");
     Serial.println(robot.theta);

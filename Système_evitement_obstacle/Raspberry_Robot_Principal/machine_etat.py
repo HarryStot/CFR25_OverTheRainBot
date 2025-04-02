@@ -14,6 +14,9 @@ beta = 45 * 2*math.pi/360 # angle capteur ultrason/sol
 # Variables initialisées pour les rendre globales
 x, y, theta = 0.0, 0.0, 0.0
 
+# Coordonnées cibles
+goals = [(0, 0, 0), (0, 1, 0), (2, 1, 0), (0, 0, 0)]
+
 class Robot:
     def __init__(self):
         self.state = "DEPART"
@@ -23,10 +26,8 @@ class Robot:
         self.K1 = 2  # Gain
         self.eps = 0.1  # seuil pour atteindre le but
 
-    def send_speed_arduino1(self, v, w):
-        phiR = (v + w * L) / r
-        phiL = (v - w * L) / r
-        ser_arduino1.write(f"{int(phiR)},{int(phiL)}\n".encode())
+    def send_goal_arduino1(self, x_goal, y_goal, theta_goal):
+        ser_arduino1.write(f"{x_goal},{y_goal},{theta_goal}\n".encode())
 
     def update_state(self, x, y, theta):
         if self.state == "DEPART":
@@ -34,17 +35,9 @@ class Robot:
             self.state = "NAVIGATION"
 
         elif self.state == "NAVIGATION":
-            x_goal, y_goal = self.x_goal[self.i_goal], self.y_goal[self.i_goal]
-            thetaref = math.atan2(y_goal - y, x_goal - x)
-            w = self.K1 * math.atan2(math.sin(thetaref - theta), math.cos(thetaref - theta))
-            v = 10 if abs(thetaref - theta) < self.eps else 0
-
-            self.send_speed_arduino1(v, w)
-
-            if abs(x - x_goal) < self.eps and abs(y - y_goal) < self.eps:
+            if self.i_goal < len(goals) - 1:
                 self.i_goal += 1
-                if self.i_goal >= len(self.x_goal):
-                    self.state = "STOP"
+                self.send_goal(*goals[self.i_goal])
 
         elif self.state == "STOP":
             self.send_speed_arduino1(0, 0)
