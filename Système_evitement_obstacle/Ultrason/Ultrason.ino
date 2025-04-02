@@ -45,12 +45,11 @@ void loop() {
     mesure = sonar[i].ping_median(5)*vitesse_son;
 
     if (mesure > 0 && mesure < 50) {
-      // Faire ce qu'on veut ici de la mesure
+    // Envoi du numéro de capteur et de la mesure sur le port série
+      Serial.print("us,"); // prefix
       Serial.print(i);
-      Serial.print("=");
-      Serial.print(mesure);
-      Serial.print("cm ");
+      Serial.print(",");
+      Serial.println(mesure);
     }
   }
-  Serial.println();
 }
