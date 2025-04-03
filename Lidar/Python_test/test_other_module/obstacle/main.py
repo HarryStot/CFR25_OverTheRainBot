@@ -97,7 +97,8 @@ def main():
             while running:
                 # If stop_event is set by the LidarThread, an obstacle was detected
                 if stop_event.is_set():
-                    robot_brain.set_obstacle_detected(True)
+                    continue
+                    # robot_brain.set_obstacle_detected(True) # TODO: UNCOMMENT!!! it's just for testing
                 else:
                     robot_brain.set_obstacle_detected(False)
                 time.sleep(0.1)

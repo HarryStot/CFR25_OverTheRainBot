@@ -240,7 +240,7 @@ class LidarThread(threading.Thread):
                     if minDistance < alertDist and runningMatch and not debug:
                         if hasattr(self, 'serial_port') and hasattr(self.serial_port, 'write'):
                             self.serial_port.write("0\r\n".encode())
-                        self.stop_event.set()
+                        # self.stop_event.set()
                     else:
                         if self.stop_event.is_set():
                             # logger.info(f'Resuming with last velocity: {lastV}')
