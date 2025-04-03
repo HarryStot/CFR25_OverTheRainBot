@@ -80,7 +80,7 @@ def main():
     try:
         from position_manager import position_manager
         from robot_interface import RobotInterface
-        from test_lidar_REC import LidarThread
+        from lidar_interface import LidarThread
     except ImportError as e:
         logger.error(f"Failed to import required modules: {e}")
         return

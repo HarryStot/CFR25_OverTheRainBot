@@ -3,7 +3,7 @@
 import time
 import threading
 
-from test_lidar_REC import LidarThread
+from lidar_interface import LidarThread
 import logging
 import signal
 from position_manager import position_manager
