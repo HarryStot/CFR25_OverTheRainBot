@@ -6,16 +6,19 @@ import logging
 import serial
 from enum import Enum
 from position_manager import position_manager
+import RPi.GPIO as GPIO
 
 logger = logging.getLogger(__name__)
 
 
 class RobotState(Enum):
     """States for the robot state machine"""
-    IDLE = 0
-    NAVIGATING = 1
-    EXECUTING_TASK = 2
-    ERROR = 3
+    START = 0
+    IDLE = 1
+    NAVIGATING = 2
+    EXECUTING_TASK = 3
+    ERROR = 4
+    # TODO: Add more states as needed like PAUSED, RESUMING, etc.
 
 
 class Task:
@@ -49,7 +52,7 @@ class RobotBrain(threading.Thread):
     """Main controller for the robot behavior"""
 
     def __init__(self,
-                 movement_port='/dev/ttyACM0',
+                 movement_port='/dev/pts/3',
                  action_port='/dev/pts/4',
                  baud_rate=115200,
                  stop_event=None):
@@ -65,7 +68,7 @@ class RobotBrain(threading.Thread):
         self.action_ser = None
 
         # State machine variables
-        self.current_state = RobotState.IDLE
+        self.current_state = RobotState.START
         self.previous_state = None
         self.state_changed = threading.Event()
 
@@ -75,12 +78,11 @@ class RobotBrain(threading.Thread):
         self.current_task_index = -1
 
         # Navigation parameters
-        self.position_tolerance = 5.0  # How close the robot needs to be to consider it at the target
-        self.orientation_tolerance = 2.0  # Degrees
+        self.position_tolerance = 2.0  # How close the robot needs to be to consider it at the target
+        self.orientation_tolerance = 1.0  # Degrees
         self.obstacle_detected = False
         self.navigation_timeout = 60  # seconds
         self.navigation_start_time = 0
-        self.last_pos_cmd = None
 
         # Task execution variables
         self.task_start_time = 0
@@ -88,6 +90,11 @@ class RobotBrain(threading.Thread):
 
         # Lock for thread safety
         self.lock = threading.RLock()
+
+        # GPIO configuration
+        self.gpio_pin = 17  # ~TODO: Set the GPIO pin for pull switch
+        GPIO.setmode(GPIO.BCM)
+        GPIO.setup(self.gpio_pin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
 
     def add_location(self, location):
         """Add a location to the mission"""
@@ -111,6 +118,22 @@ class RobotBrain(threading.Thread):
                 self.current_state = new_state
                 self.state_changed.set()
                 logger.info(f"State changed: {self.previous_state} -> {self.current_state}")
+
+    def handle_start_state(self):
+        """Handle the START state"""
+        # Initialize the robot and move to IDLE state
+        logger.info("Initializing robot...")
+
+        logger.info("Ready...")
+        while GPIO.input(self.gpio_pin) == GPIO.LOW:
+            time.sleep(0.1)
+
+        logger.info("Steady...")
+        while GPIO.input(self.gpio_pin) == GPIO.HIGH:
+            time.sleep(0.1)
+
+        logger.info("Go!")
+        self.set_state(RobotState.IDLE)
 
     def handle_idle_state(self):
         """Handle the IDLE state"""
@@ -178,9 +201,9 @@ class RobotBrain(threading.Thread):
                 self.send_movement_command(
                     f"GX{current_location.x},Y{current_location.y},Z{current_location.orientation}")
             else:
-                self.send_movement_command(f"GX{current_location.x},Y{current_location.y},Z{current_z}")
+                self.send_movement_command(f"GX{current_location.x},Y{current_location.y}")
 
-            # logger.info(f"Navigating to {current_location.name}, distance: {distance:.2f}")
+            logger.info(f"Navigating to {current_location.name}, distance: {distance:.2f}")
 
     def handle_executing_task_state(self):
         """Handle the EXECUTING_TASK state"""
@@ -217,26 +240,21 @@ class RobotBrain(threading.Thread):
     def handle_error_state(self):
         """Handle the ERROR state"""
         # In a real implementation, you might want more sophisticated error recovery
-        # For now, we'll just stop, wait, and then go back to IDLE
+        # For now, we'll just stop, wait, and then go back to NAVIGATING
         logger.error("Handling error state")
 
         # Stop any movement
-        self.send_movement_command("STOP")
+        self.send_movement_command("S")  # Stop command
 
         # Wait a bit
         time.sleep(2)
 
-        # Go back to IDLE
-        self.set_state(RobotState.IDLE)
+        # Go back to NAVIGATING
+        self.set_state(RobotState.NAVIGATING)
 
     def send_movement_command(self, command):
         """Send a command to the movement serial port"""
         if self.movement_ser and self.movement_ser.is_open:
-            # Check if the command is a repeat
-            if command == self.last_pos_cmd:
-                logger.debug("Ignoring repeated movement command")
-                return
-            self.last_pos_cmd = command
             try:
                 full_command = f"{command}\r\n"
                 self.movement_ser.write(full_command.encode())
@@ -274,18 +292,16 @@ class RobotBrain(threading.Thread):
             # Connect to serial ports
             logger.info(f"Connecting to movement port {self.movement_port} at {self.baud_rate} baud")
             self.movement_ser = serial.Serial(self.movement_port, self.baud_rate, timeout=1)
-            if not self.movement_ser.is_open:
-                logger.error(f"Failed to open movement port {self.movement_port}")
 
             logger.info(f"Connecting to action port {self.action_port} at {self.baud_rate} baud")
             self.action_ser = serial.Serial(self.action_port, self.baud_rate, timeout=1)
-            if not self.action_ser.is_open:
-                logger.error(f"Failed to open action port {self.action_port}")
 
             time.sleep(2)  # Wait for connections to stabilize
 
             while not self.stop_event.is_set():
                 # State machine
+                if self.current_state == RobotState.START:
+                    self.handle_start_state()
                 if self.current_state == RobotState.IDLE:
                     self.handle_idle_state()
                 elif self.current_state == RobotState.NAVIGATING:
@@ -309,3 +325,5 @@ class RobotBrain(threading.Thread):
             if self.action_ser and self.action_ser.is_open:
                 self.action_ser.close()
                 logger.info("Action serial port closed")
+
+            GPIO.cleanup()
