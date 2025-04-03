@@ -125,11 +125,11 @@ class RobotBrain(threading.Thread):
         logger.info("Initializing robot...")
 
         logger.info("Ready...")
-        while GPIO.input(self.gpio_pin) == GPIO.LOW:
+        while GPIO.input(self.gpio_pin) == GPIO.HIGH:
             time.sleep(0.1)
 
         logger.info("Steady...")
-        while GPIO.input(self.gpio_pin) == GPIO.HIGH:
+        while GPIO.input(self.gpio_pin) == GPIO.LOW:
             time.sleep(0.1)
 
         logger.info("Go!")
@@ -302,7 +302,7 @@ class RobotBrain(threading.Thread):
                 # State machine
                 if self.current_state == RobotState.START:
                     self.handle_start_state()
-                if self.current_state == RobotState.IDLE:
+                elif self.current_state == RobotState.IDLE:
                     self.handle_idle_state()
                 elif self.current_state == RobotState.NAVIGATING:
                     self.handle_navigating_state()

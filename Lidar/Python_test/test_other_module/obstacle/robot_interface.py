@@ -46,9 +46,9 @@ class RobotInterface(threading.Thread):
                 self.connected = True
                 retry_count = 0  # Reset retry count on successful connection
 
-                logger.info("Starting to read from serial port...") # TODO: Adjust log level
+                logger.info("Starting to read from serial port...") # TODO: Adjust log level ?
                 while not self.stop_event.is_set():
-                    logger.info("Checking for data...") # TODO: Remove or adjust log level
+                    logger.debug("Checking for data...") # TODO: Remove or adjust log level
                     if self.ser.in_waiting > 0:
                         try:
                             line = self.ser.readline().decode('utf-8').strip()

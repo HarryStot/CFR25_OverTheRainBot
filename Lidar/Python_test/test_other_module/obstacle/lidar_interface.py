@@ -236,12 +236,12 @@ class LidarThread(threading.Thread):
                         cv2.imshow('frame', img)
                         cv2.waitKey(1)
 
+                    # TODO: Remove or change how it's used
                     if minDistance < alertDist and runningMatch and not debug:
                         if hasattr(self, 'serial_port') and hasattr(self.serial_port, 'write'):
                             self.serial_port.write("0\r\n".encode())
                         self.stop_event.set()
                     else:
-                        # TODO: Remove
                         if self.stop_event.is_set():
                             # logger.info(f'Resuming with last velocity: {lastV}')
                             if hasattr(self, 'serial_port') and hasattr(self.serial_port, 'write'):
@@ -287,7 +287,7 @@ def main():
         logger.info("LidarThread started")
 
         # Run for a few seconds for demonstration
-        time.sleep(1000)
+        time.sleep(100)
 
         # Signal to stop and end
         logger.info("Signaling LidarThread to stop and end")
