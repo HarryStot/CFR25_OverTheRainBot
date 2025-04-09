@@ -94,20 +94,36 @@ class RobotBrain(threading.Thread):
         self.lock = threading.RLock()
 
         # GPIO configuration
-        self.gpio_pin = 17  # ~TODO: Set the GPIO pin for pull switch
+        self.gpio_pin = 17  # GPIO pin for pull switch
         GPIO.setmode(GPIO.BCM)
         GPIO.setup(self.gpio_pin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
 
-        # Ajouter le module de navigation par champ potentiel
+        # Initialize potential field navigation
         self.potential_nav = PotentialFieldNavigation()
 
-        # Liste des obstacles détectés (à remplir depuis le LidarThread)
+        # List of detected obstacles (to be updated from LidarThread)
         self.obstacles = []
 
+        # Last calculated control command (for debugging)
+        self.last_v = 0.0
+        self.last_omega = 0.0
+
     def update_obstacles(self, obstacle_list):
-        """Update the list of obstacles"""
+        """Update the list of obstacles
+
+        Arguments:
+            obstacle_list: List of obstacles in format [(center_x, center_y, width, height), ...]
+        """
         with self.lock:
-            self.obstacles = obstacle_list
+            # Convert from rectangle format to point format for potential field navigation
+            # Each obstacle is represented as just its center point
+            self.obstacles = [(obstacle[0], obstacle[1]) for obstacle in obstacle_list]
+
+            if obstacle_list:
+                logger.debug(f"Updated {len(obstacle_list)} obstacles")
+                if len(obstacle_list) < 5:  # Only log details for a few obstacles
+                    for obs in obstacle_list:
+                        logger.debug(f"Obstacle at ({obs[0]:.1f}, {obs[1]:.1f}), size: {obs[2]:.1f}x{obs[3]:.1f}")
 
     def add_location(self, location):
         """Add a location to the mission"""
@@ -174,8 +190,8 @@ class RobotBrain(threading.Thread):
         # Check if obstacle detected
         if self.obstacle_detected:
             logger.warning("Obstacle detected during navigation")
-            self.set_state(RobotState.ERROR)
-            return
+            # We'll continue with potential field navigation instead of going to ERROR state
+            # because the potential field should handle obstacle avoidance
 
         # Get current position
         current_x, current_y, current_z = position_manager.get_position()
@@ -196,7 +212,7 @@ class RobotBrain(threading.Thread):
                 if orientation_diff > self.orientation_tolerance:
                     # Need to adjust orientation
                     self.send_movement_command(
-                        f"GX{current_location.x:.2f},Y{current_location.y:.2f},Z{current_location.orientation:.2f}")
+                        f"GX{current_location.x:.2f}Y{current_location.y:.2f}Z{current_location.orientation:.2f}")
                     logger.info(f"Adjusting orientation to {current_location.orientation} degrees")
                     return
 
@@ -211,31 +227,50 @@ class RobotBrain(threading.Thread):
                 # No tasks, go back to IDLE
                 self.set_state(RobotState.IDLE)
         else:
-            # Navigation vers la cible en utilisant le champ potentiel
+            # Navigation using potential field
+            # Convert orientation to radians for potential field calculation
+            robot_heading_rad = np.radians(current_z)
+
+            # Compute control commands using potential field
             v, omega = self.potential_nav.compute_control(
                 robot_pos=current_pos,
-                robot_heading=np.radians(current_z),  # Conversion en radians
+                robot_heading=robot_heading_rad,
                 target_pos=target_pos,
                 obstacles=self.obstacles
             )
-            
-            # Calculer un point cible intermédiaire basé sur la direction du champ potentiel
-            max_look_ahead = 1.0  # Distance maximale pour le waypoint
-            look_ahead_distance = min(distance / 2, max_look_ahead)  # La moitié de la distance ou max_look_ahead
-            
-            # Obtenir l'angle cible en degrés
-            heading_rad = np.radians(current_z)  # Orientation actuelle en radians
-            target_heading_rad = heading_rad + omega * 0.1  # Orientation cible après dt=0.1s
-            target_heading_deg = np.degrees(target_heading_rad) % 360
-            
-            # Calculer les coordonnées du point cible
-            waypoint_x = current_x + look_ahead_distance * np.cos(target_heading_rad)
-            waypoint_y = current_y + look_ahead_distance * np.sin(target_heading_rad)
-            
-            # Envoyer la commande de mouvement au format GX__Y__Z__
-            self.send_movement_command(f"GX{waypoint_x:.2f}Y{waypoint_y:.2f}Z{target_heading_deg:.2f}")
 
-            logger.info(f"Navigating to {current_location.name}, distance: {distance:.2f}")
+            # Save last computed control values for debugging
+            self.last_v = v
+            self.last_omega = omega
+
+            # Calculate next waypoint based on potential field
+            # Use a shorter look-ahead distance when obstacles are nearby
+            if self.obstacles:
+                look_ahead_distance = min(distance * 0.5, 5.0)  # Half of distance to target, max 5 units
+            else:
+                look_ahead_distance = min(distance * 0.7, 10.0)  # Longer look-ahead when no obstacles
+
+            # Convert omega (angular velocity) to a heading change
+            # Small delta_t for prediction
+            delta_t = 0.1
+            new_heading_rad = robot_heading_rad + omega * delta_t
+
+            # Calculate waypoint coordinates
+            waypoint_x = current_x + v * np.cos(new_heading_rad) * delta_t * look_ahead_distance
+            waypoint_y = current_y + v * np.sin(new_heading_rad) * delta_t * look_ahead_distance
+
+            # Convert heading back to degrees
+            new_heading_deg = np.degrees(new_heading_rad) % 360
+
+            # Send movement command to robot
+            self.send_movement_command(f"GX{waypoint_x:.2f}Y{waypoint_y:.2f}Z{new_heading_deg:.2f}")
+
+            # Log navigation status
+            if self.obstacles:
+                logger.info(
+                    f"Navigating to {current_location.name} with {len(self.obstacles)} obstacles, distance: {distance:.2f}")
+            else:
+                logger.info(f"Navigating to {current_location.name}, distance: {distance:.2f}")
 
     def handle_executing_task_state(self):
         """Handle the EXECUTING_TASK state"""
@@ -325,8 +360,11 @@ class RobotBrain(threading.Thread):
             logger.info(f"Connecting to movement port {self.movement_port} at {self.baud_rate} baud")
             self.movement_ser = serial.Serial(self.movement_port, self.baud_rate, timeout=1)
 
-            logger.info(f"Connecting to action port {self.action_port} at {self.baud_rate} baud")
-            self.action_ser = serial.Serial(self.action_port, self.baud_rate, timeout=1)
+            if self.action_port:
+                logger.info(f"Connecting to action port {self.action_port} at {self.baud_rate} baud")
+                self.action_ser = serial.Serial(self.action_port, self.baud_rate, timeout=1)
+            else:
+                logger.info("No action port specified, skipping")
 
             time.sleep(2)  # Wait for connections to stabilize
 
@@ -359,4 +397,3 @@ class RobotBrain(threading.Thread):
                 logger.info("Action serial port closed")
 
             GPIO.cleanup()
-

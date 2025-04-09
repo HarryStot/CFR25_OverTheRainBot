@@ -2,12 +2,14 @@
 
 import time
 import threading
-
 from lidar_interface import LidarThread
 import logging
 import threading
 import sys
 from robot_brain import RobotBrain, Location, Task, RobotState
+from robot_interface import RobotInterface
+import signal
+from position_manager import position_manager
 
 debug = True
 # Configure logging
@@ -94,12 +96,24 @@ def main():
         def update_brain_obstacles():
             # This function runs periodically to update the brain about obstacles
             while running:
-                # If stop_event is set by the LidarThread, an obstacle was detected
-                if stop_event.is_set():
-                    continue
-                    # robot_brain.set_obstacle_detected(True) # TODO: UNCOMMENT!!! it's just for testing
-                else:
-                    robot_brain.set_obstacle_detected(False)
+                if lidar_thread:
+                    # Get obstacles from lidar thread
+                    obstacles = lidar_thread.get_obstacles()
+                    # Update brain with obstacle data
+                    robot_brain.update_obstacles(obstacles)
+
+                    # Also update the obstacle detected flag if necessary
+                    if obstacles and any(
+                            # Check if any obstacle is close to our path
+                            ((obstacle[0] - robot_brain.position_tolerance < position_manager.get_position()[0] <
+                              obstacle[0] + obstacle[2] + robot_brain.position_tolerance) and
+                             (obstacle[1] - robot_brain.position_tolerance < position_manager.get_position()[1] <
+                              obstacle[1] + obstacle[3] + robot_brain.position_tolerance))
+                            for obstacle in obstacles
+                    ):
+                        robot_brain.set_obstacle_detected(True)
+                    else:
+                        robot_brain.set_obstacle_detected(False)
                 time.sleep(0.1)
 
         # Start obstacle update thread

@@ -125,6 +125,10 @@ class LidarThread(threading.Thread):
 
         return obstacles
 
+    def get_obstacles(self):
+        """Return the current list of detected obstacles"""
+        return self.process_lidar_data([])  # Process the latest data
+
     def run(self):
         global posX, posY, posZ, targX, targY, lastV, cote, runningMatch
 
