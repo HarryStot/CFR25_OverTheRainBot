@@ -69,11 +69,11 @@ def main():
         )
 
         # Set up a demo mission with locations and tasks
-        location1 = Location("Starting Point", 10, 10, 90, [
-            Task("Task 1", "Ser", ["12:0", "13:0"], 5)
-        ])
+        location1 = Location("Starting Point", 10, 10, 90, [])
 
-        location2 = Location("Checkpoint 1", 150, 150, 45, [])
+        location2 = Location("Checkpoint 1", 150, 150, 45, [
+            Task("Task 1", "SRV", {"12": ":45:5", "10": ":10:10"}, 5)
+        ])
 
         location3 = Location("Destination", 200, 100, 0, [])
 

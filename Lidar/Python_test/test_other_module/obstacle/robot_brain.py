@@ -270,7 +270,7 @@ class RobotBrain(threading.Thread):
                 # Build the command string based on the command and params
                 params_str = ""
                 if params:
-                    params_str = "," + ",".join([f"{k}{v}" for k, v in params.items()])
+                    params_str = ";".join([f"{k}{v}" for k, v in params.items()])
 
                 full_command = f"{command}{params_str}\r\n"
                 self.action_ser.write(full_command.encode())
