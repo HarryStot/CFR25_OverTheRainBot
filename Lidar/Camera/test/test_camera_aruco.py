@@ -13,12 +13,12 @@ parameters = aruco.DetectorParameters()
 # Create detector object
 detector = aruco.ArucoDetector(aruco_dict, parameters)
 
-print("🔍 Starting ArUco detection. Press 'q' to quit.")
+print("Starting ArUco detection. Press 'q' to quit.")
 
 while True:
     ret, frame = cap.read()
     if not ret:
-        print("❌ Failed to grab frame.")
+        print("Failed to grab frame.")
         break
 
     # Convert to grayscale
@@ -31,7 +31,7 @@ while True:
     if ids is not None:
         aruco.drawDetectedMarkers(frame, corners, ids)
         for i, marker_id in enumerate(ids):
-            print(f"🆔 Marker detected: ID = {marker_id[0]}")
+            print(f"Marker detected: ID = {marker_id[0]}")
 
     # Show the result
     cv2.imshow("ArUco Detection", frame)

@@ -3,5 +3,5 @@
   <component name="Black">
     <option name="sdkName" value="Python 3.12 (pythonProject1)" />
   </component>
-  <component name="ProjectRootManager" version="2" project-jdk-name="Remote Python 3.11.2 (sftp://overtherainbot@100.102.161.15:22/home/overtherainbot/.virtualenvs/Lidar/bin/python)" project-jdk-type="Python SDK" />
+  <component name="ProjectRootManager" version="2" project-jdk-name="Remote Python 3.11.2 (sftp://overtherainbot_pi5@100.74.220.74:22/home/overtherainbot_pi5/.virtualenvs/Lidar/bin/python)" project-jdk-type="Python SDK" />
 </project>

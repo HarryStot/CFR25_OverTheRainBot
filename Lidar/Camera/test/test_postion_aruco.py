@@ -325,4 +325,4 @@ if __name__ == "__main__":
     detector = ArucoDetector(marker_size=marker_size)
 
     # Run detection with camera (0 for default, 1 for external)
-    detector.run_camera(1)
+    detector.run_camera(0)
