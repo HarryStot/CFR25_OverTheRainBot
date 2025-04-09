@@ -7,6 +7,8 @@ import serial
 from enum import Enum
 from position_manager import position_manager
 import RPi.GPIO as GPIO
+import numpy as np
+from avoidance_system import PotentialFieldNavigation
 
 logger = logging.getLogger(__name__)
 
@@ -96,6 +98,17 @@ class RobotBrain(threading.Thread):
         GPIO.setmode(GPIO.BCM)
         GPIO.setup(self.gpio_pin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
 
+        # Ajouter le module de navigation par champ potentiel
+        self.potential_nav = PotentialFieldNavigation()
+
+        # Liste des obstacles détectés (à remplir depuis le LidarThread)
+        self.obstacles = []
+
+    def update_obstacles(self, obstacle_list):
+        """Update the list of obstacles"""
+        with self.lock:
+            self.obstacles = obstacle_list
+
     def add_location(self, location):
         """Add a location to the mission"""
         with self.lock:
@@ -149,7 +162,7 @@ class RobotBrain(threading.Thread):
             time.sleep(0.5)
 
     def handle_navigating_state(self):
-        """Handle the NAVIGATING state"""
+        """Handle the NAVIGATING state with potential field navigation"""
         current_location = self.locations[self.current_location_index]
 
         # Check if navigation timed out
@@ -166,6 +179,8 @@ class RobotBrain(threading.Thread):
 
         # Get current position
         current_x, current_y, current_z = position_manager.get_position()
+        current_pos = (current_x, current_y)
+        target_pos = (current_location.x, current_location.y)
 
         # Calculate distance to target
         distance = ((current_x - current_location.x) ** 2 +
@@ -181,7 +196,7 @@ class RobotBrain(threading.Thread):
                 if orientation_diff > self.orientation_tolerance:
                     # Need to adjust orientation
                     self.send_movement_command(
-                        f"GX{current_location.x},Y{current_location.y},Z{current_location.orientation}")
+                        f"GX{current_location.x:.2f},Y{current_location.y:.2f},Z{current_location.orientation:.2f}")
                     logger.info(f"Adjusting orientation to {current_location.orientation} degrees")
                     return
 
@@ -196,12 +211,29 @@ class RobotBrain(threading.Thread):
                 # No tasks, go back to IDLE
                 self.set_state(RobotState.IDLE)
         else:
-            # Send movement command to the target
-            if current_location.orientation is not None:
-                self.send_movement_command(
-                    f"GX{current_location.x},Y{current_location.y},Z{current_location.orientation}")
-            else:
-                self.send_movement_command(f"GX{current_location.x},Y{current_location.y}")
+            # Navigation vers la cible en utilisant le champ potentiel
+            v, omega = self.potential_nav.compute_control(
+                robot_pos=current_pos,
+                robot_heading=np.radians(current_z),  # Conversion en radians
+                target_pos=target_pos,
+                obstacles=self.obstacles
+            )
+            
+            # Calculer un point cible intermédiaire basé sur la direction du champ potentiel
+            max_look_ahead = 1.0  # Distance maximale pour le waypoint
+            look_ahead_distance = min(distance / 2, max_look_ahead)  # La moitié de la distance ou max_look_ahead
+            
+            # Obtenir l'angle cible en degrés
+            heading_rad = np.radians(current_z)  # Orientation actuelle en radians
+            target_heading_rad = heading_rad + omega * 0.1  # Orientation cible après dt=0.1s
+            target_heading_deg = np.degrees(target_heading_rad) % 360
+            
+            # Calculer les coordonnées du point cible
+            waypoint_x = current_x + look_ahead_distance * np.cos(target_heading_rad)
+            waypoint_y = current_y + look_ahead_distance * np.sin(target_heading_rad)
+            
+            # Envoyer la commande de mouvement au format GX__Y__Z__
+            self.send_movement_command(f"GX{waypoint_x:.2f}Y{waypoint_y:.2f}Z{target_heading_deg:.2f}")
 
             logger.info(f"Navigating to {current_location.name}, distance: {distance:.2f}")
 
@@ -327,3 +359,4 @@ class RobotBrain(threading.Thread):
                 logger.info("Action serial port closed")
 
             GPIO.cleanup()
+

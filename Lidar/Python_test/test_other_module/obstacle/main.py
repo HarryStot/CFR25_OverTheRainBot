@@ -5,9 +5,8 @@ import threading
 
 from lidar_interface import LidarThread
 import logging
-import signal
-from position_manager import position_manager
-from robot_interface import RobotInterface
+import threading
+import sys
 from robot_brain import RobotBrain, Location, Task, RobotState
 
 debug = True
