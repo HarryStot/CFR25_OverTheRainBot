@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-
 import threading
 import logging
 
@@ -45,20 +44,20 @@ class PositionManager:
             self._pos_y = y
             if z is not None:
                 self._pos_z = z
-            logger.debug(f"Robot position updated: ({x}, {y}, {self._pos_z})")
-
+            logger.debug(f"Position updated: ({self._pos_x}, {self._pos_y}, {self._pos_z})")
+    
     def set_target(self, x, y):
         """Set target position"""
         with self._lock:
             self._targ_x = x
             self._targ_y = y
-            logger.debug(f"Target updated: ({x}, {y})")
-
+            logger.debug(f"Target updated: ({self._targ_x}, {self._targ_y})")
+    
     def set_velocity(self, velocity):
         """Set current velocity"""
         with self._lock:
             self._velocity = velocity
-            logger.debug(f"Velocity updated: {velocity}")
+            logger.debug(f"Velocity updated: {self._velocity}")
 
 
 # Create a singleton instance
