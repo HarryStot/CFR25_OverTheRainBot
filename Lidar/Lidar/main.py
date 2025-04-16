@@ -70,13 +70,13 @@ def main():
         )
 
         # Set up a demo mission with locations and tasks
-        location1 = Location("Starting Point", 10, 10, 90, [])
+        location1 = Location("Starting Point", 0, 0, 90, [])
 
-        location2 = Location("Checkpoint 1", 150, 150, 45, [
-            Task("Task 1", "SRV", {"12": ":45:5", "10": ":10:10"}, 5)
+        location2 = Location("Checkpoint 1", 0, 100, 90, [
+            # Task("Task 1", "SRV", {"12": ":45:5", "10": ":10:10"}, 5)
         ])
 
-        location3 = Location("Destination", 200, 100, 0, [])
+        location3 = Location("Destination", 0, 200, 90, [])
 
         # Add locations to the mission
         robot_brain.add_location(location1)
@@ -150,6 +150,10 @@ def main():
         interface_stop_event.set()
         brain_stop_event.set()
         end_event.set()
+        # Send "S" command to the robot to stop
+        if robot_brain:
+            robot_brain.send_movement_command("S")
+
         time.sleep(1)
 
         # Wait for threads to finish

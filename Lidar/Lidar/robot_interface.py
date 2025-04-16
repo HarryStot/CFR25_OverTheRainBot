@@ -141,3 +141,14 @@ class RobotInterface(threading.Thread):
 
         elif "error" in line.lower():
             logger.error(f"Arduino reported error: {line}")
+
+    def send_command(self, command):
+        """Send a movement command to the Arduino"""
+        if self.connected:
+            try:
+                logger.info(f"Sending command: {command}")
+                self.ser.write(f"{command}\n".encode('utf-8'))
+            except serial.SerialException as e:
+                logger.error(f"Error sending command: {e}")
+        else:
+            logger.warning("Not connected to Arduino, cannot send command")

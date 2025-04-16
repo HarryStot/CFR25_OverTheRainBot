@@ -6,7 +6,9 @@ import logging
 import signal
 import sys
 import os
-import importlib.util
+
+from robot_interface import RobotInterface
+from position_manager import position_manager
 
 # Configuration du logging
 logging.basicConfig(level=logging.INFO,
@@ -17,61 +19,10 @@ logger = logging.getLogger(__name__)
 running = True
 
 
-# Classe de remplacement pour la gestion des positions
-class DummyPositionManager:
-    """Gestionnaire de position simplifié pour le test"""
-
-    def __init__(self):
-        self.x = 0
-        self.y = 0
-        self.z = 0
-        self.target_x = 0
-        self.target_y = 0
-        self.velocity = 0
-
-    def get_position(self):
-        return self.x, self.y, self.z
-
-    def get_target(self):
-        return self.target_x, self.target_y
-
-    def get_velocity(self):
-        return self.velocity
-
-    def update_position(self, x=None, y=None, z=None):
-        if x is not None: self.x = x
-        if y is not None: self.y = y
-        if z is not None: self.z = z
-
-
-# Créer l'instance de notre gestionnaire de position
-position_manager = DummyPositionManager()
-
-
 def signal_handler(sig, frame):
     global running
     logger.info("Signal d'arrêt reçu, arrêt en cours...")
     running = False
-
-
-# Import de RobotInterface en utilisant le chemin absolu
-def import_robot_interface():
-    """Importe dynamiquement RobotInterface depuis le répertoire parent"""
-    # Obtenir le chemin absolu du répertoire parent
-    parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    module_path = os.path.join(parent_dir, "robot_interface.py")
-
-    # Vérifier si le fichier existe
-    if not os.path.exists(module_path):
-        logger.error(f"Module robot_interface introuvable: {module_path}")
-        sys.exit(1)
-
-    # Importer le module dynamiquement
-    spec = importlib.util.spec_from_file_location("robot_interface", module_path)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-
-    return module.RobotInterface
 
 
 # Liste des commandes prédéfinies pour test rapide
@@ -79,7 +30,7 @@ COMMANDES_PREDEFINIES = [
     ("Avancer (vitesse 100)", "V100"),
     ("Reculer (vitesse -100)", "V-100"),
     ("Arrêter", "S"),
-    ("Aller à la position X=100, Y=100, Z=90", "GX100Y100Z90"),
+    ("Aller à la position X=100, Y=0, Z=90", "GX100Y0Z90"),
     ("Régler la vitesse à 150", "V150"),
     ("Demander position actuelle", "P"),
     ("Commander servo 12 à position 45 vitesse 5", "SRV12:45:5")
@@ -102,22 +53,12 @@ def main():
     global running
     signal.signal(signal.SIGINT, signal_handler)
 
-    # Importer RobotInterface
-    try:
-        RobotInterface = import_robot_interface()
-    except Exception as e:
-        logger.error(f"Erreur lors de l'importation de RobotInterface: {e}")
-        return
-
     # Demander le port série
     default_port = '/dev/ttyACM0'
     port = input(f"Port série (défaut: {default_port}): ") or default_port
 
     baud_rate = 115200
     stop_event = threading.Event()
-
-    # Initialisation du robot_interface
-    robot_interface = None
 
     try:
         # Démarrer l'interface robot
@@ -161,7 +102,7 @@ def main():
                 print("V<valeur>: Vitesse (ex: V100)")
                 print("R<valeur>: Rotation en degrés (ex: R90)")
                 print("S: Stop")
-                print("G<X,Y,Z>: Aller à position (ex: GX100Y200Z90)")
+                print("G<X,Y>: Aller à position (ex: GX100,Y200)")
                 print("P: Demander position")
                 print("SX<val>,Y<val>,Z<val>: Définir position")
                 print("SRV<servo_id>:<pos>:<vitesse>: Contrôler servo")
@@ -179,6 +120,9 @@ def main():
             else:
                 print("Option non valide")
 
+            # Afficher position après chaque commande
+            afficher_position()
+
     except Exception as e:
         logger.error(f"Erreur: {e}")
 
@@ -187,7 +131,7 @@ def main():
         logger.info("Arrêt de l'interface...")
         stop_event.set()
 
-        if robot_interface and robot_interface.is_alive():
+        if 'robot_interface' in locals() and robot_interface.is_alive():
             robot_interface.join(timeout=2)
 
         logger.info("Test terminé!")

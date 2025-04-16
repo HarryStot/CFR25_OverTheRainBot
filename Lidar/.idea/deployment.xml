@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
-  <component name="PublishConfigData" autoUpload="Always" serverName="overtherainbot_pi5@100.74.220.74:22 password">
+  <component name="PublishConfigData" autoUpload="Always" serverName="overtherainbot@100.102.161.15:22 password" confirmBeforeUploading="false">
+    <option name="confirmBeforeUploading" value="false" />
     <serverData>
       <paths name="nathan@192.168.1.45:22 password">
         <serverdata>

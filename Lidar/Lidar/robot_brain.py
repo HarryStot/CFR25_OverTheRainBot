@@ -70,9 +70,10 @@ class RobotBrain(threading.Thread):
         self.action_ser = None
 
         # State machine variables
-        self.current_state = RobotState.START
+        self.current_state = RobotState.NAVIGATING
         self.previous_state = None
         self.state_changed = threading.Event()
+        self.avoidance_enabled = False
 
         # Mission variables
         self.locations = []
@@ -182,10 +183,10 @@ class RobotBrain(threading.Thread):
         current_location = self.locations[self.current_location_index]
 
         # Check if navigation timed out
-        if time.time() - self.navigation_start_time > self.navigation_timeout:
-            logger.warning(f"Navigation to {current_location.name} timed out")
-            self.set_state(RobotState.ERROR)
-            return
+        # if time.time() - self.navigation_start_time > self.navigation_timeout:
+        #     logger.warning(f"Navigation to {current_location.name} timed out")
+        #     self.set_state(RobotState.ERROR)
+        #     return
 
         # Check if obstacle detected
         if self.obstacle_detected:
@@ -226,7 +227,8 @@ class RobotBrain(threading.Thread):
             else:
                 # No tasks, go back to IDLE
                 self.set_state(RobotState.IDLE)
-        else:
+        elif self.avoidance_enabled:
+
             # Navigation using potential field
             # Convert orientation to radians for potential field calculation
             robot_heading_rad = np.radians(current_z)
@@ -271,6 +273,11 @@ class RobotBrain(threading.Thread):
                     f"Navigating to {current_location.name} with {len(self.obstacles)} obstacles, distance: {distance:.2f}")
             else:
                 logger.info(f"Navigating to {current_location.name}, distance: {distance:.2f}")
+
+        elif not self.avoidance_enabled:
+            # Simple direct navigation without potential field
+            self.send_movement_command(f"GX{current_location.x:.2f}Y{current_location.y:.2f}Z{current_z:.2f}")
+            logger.info(f"Directly navigating to {current_location.name}, distance: {distance:.2f}")
 
     def handle_executing_task_state(self):
         """Handle the EXECUTING_TASK state"""
