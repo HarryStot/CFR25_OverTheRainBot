@@ -20,10 +20,12 @@ Odometry robot(L, r);
 
 float v = 10.0, w;
 float x_goal = 0, y_goal = 1, theta_goal = M_PI/2;
-float K1 = 120; // Tuning parameter for angular speed
-float eps = 0.05;
+float K1 = 120; // Tuning parameter for angular speed during navigation
+float K_align = 10.0; // Tuning parameter for angular speed during alignment
+float eps = 0.05; // Position tolerance
+float alignment_tolerance = 0.05; // Angular tolerance for alignment (radians)
 
-enum StateType { STOP, NAVIGATION, SENDPOS };
+enum StateType { STOP, ALIGNING, NAVIGATION, SENDPOS }; // Added ALIGNING state
 StateType State = STOP; // Initialize state to STOP
 StateType previousState = STOP; // Initialize previousState accordingly
 
@@ -63,8 +65,13 @@ void loop() {
       previousState = State; // Store current state before changing
       State = SENDPOS;
     } else if (State == STOP && (cmd.indexOf('G') != -1 || cmd.indexOf('V') != -1)) {
-        // If stopped and a new goal or velocity is received, start navigating again
-        State = NAVIGATION;
+        // If stopped and a new goal or velocity is received, decide whether to align or navigate
+        if (cmd.indexOf('G') != -1) { // If goal is present, start with alignment
+             State = ALIGNING;
+        } else { // If only velocity is present, go directly to navigation (or handle as error/ignore?)
+             // For now, let's assume V without G means just set speed for potential future NAV
+             // State = NAVIGATION; // Or keep STOP until G is received? Let's keep STOP.
+        }
     }
 
 
@@ -85,10 +92,10 @@ void loop() {
         x_goal = cmd.substring(gPos + 1, xEnd).toFloat() / 100.0; 
         y_goal = cmd.substring(yPos + 1, yEnd).toFloat() / 100.0; 
         // Convert incoming theta_goal from degrees to radians
-        theta_goal = cmd.substring(zPos + 1, zEnd).toFloat() * M_PI / 180.0; 
-        // If a new goal is set, ensure we are in NAVIGATION state (unless S was also sent)
-        if (State != STOP) {
-             State = NAVIGATION;
+        theta_goal = cmd.substring(zPos + 1, zEnd).toFloat() * M_PI / 180.0;
+        // If a new goal is set, ensure we start the alignment process (unless S was also sent)
+        if (State != STOP && State != SENDPOS) { // Avoid changing state if stopped or just sending pos
+             State = ALIGNING; // Start with alignment
         }
     }
 
@@ -96,10 +103,12 @@ void loop() {
     if (vPos != -1) {
       int vEnd = findValueEnd(cmd, vPos + 1);
       v = cmd.substring(vPos + 1, vEnd).toFloat();
-       // If a new velocity is set, ensure we are in NAVIGATION state (unless S was also sent)
-       if (State != STOP) {
-           State = NAVIGATION;
-       }
+       // Setting velocity doesn't automatically start navigation anymore,
+       // it just sets the speed for the NAVIGATION phase.
+       // Remove state change here:
+       // if (State != STOP) {
+       //     State = NAVIGATION;
+       // }
     }
   }
 
@@ -113,22 +122,62 @@ void loop() {
       // Serial.print("STOPPED,X:"); Serial.print(robot.x); Serial.print(",Y:"); Serial.print(robot.y); Serial.print(",Z:"); Serial.println(robot.theta);
       break;
 
+    case ALIGNING:
+      { // Use braces to create a local scope for variables
+        float theta_diff = theta_goal - robot.theta;
+        // Normalize angle difference to [-PI, PI]
+        theta_diff = atan2(sin(theta_diff), cos(theta_diff));
+
+        if (abs(theta_diff) < alignment_tolerance) {
+          // Alignment complete, transition to NAVIGATION
+          State = NAVIGATION;
+          motorR.setMotorSpeed(0); // Stop briefly before navigating
+          motorL.setMotorSpeed(0);
+          // Serial.println("Alignment complete. Starting Navigation."); // Debug message
+        } else {
+          // Still aligning, rotate in place (v=0)
+          float current_v = 0; // Linear velocity is zero during alignment
+          w = K_align * theta_diff; // Proportional control for angular velocity
+
+          // Optional: Add saturation for angular velocity during alignment
+          // float max_align_w = 1.5; // rad/s
+          // w = constrain(w, -max_align_w, max_align_w);
+
+          float speedR = (current_v + w * L) / r;
+          float speedL = (current_v - w * L) / r;
+
+          motorR.setMotorSpeed(speedR);
+          motorL.setMotorSpeed(speedL);
+
+          // Send position periodically during alignment
+          Serial.print("ALIGN"); Serial.print(",X:"); // Indicate alignment phase
+          Serial.print(robot.x * 100.0); // Convert x to cm
+          Serial.print(",Y:");
+          Serial.print(robot.y * 100.0); // Convert y to cm
+          Serial.print(",Z:");
+          Serial.println(robot.theta * 180.0 / M_PI); // Convert theta to degrees
+        }
+      }
+      break;
+
     case NAVIGATION:
       // Check if goal is reached before calculating new speeds
       if (sqrt(pow(robot.y - y_goal, 2) + pow(robot.x - x_goal, 2)) < eps) { // Use eps for goal check
           State = STOP;
           motorR.setMotorSpeed(0); // Stop motors immediately upon reaching goal
-          motorL.setMotorSpeed(0);                
+          motorL.setMotorSpeed(0);
+          // Serial.println("Goal reached. Stopping."); // Debug message
       } else {
           float thetaref = atan2(y_goal - robot.y, x_goal - robot.x);
           // Normalize angle difference to [-PI, PI]
           float angle_diff = atan2(sin(thetaref - robot.theta), cos(thetaref - robot.theta));
-          w = K1 * angle_diff;
+          w = K1 * angle_diff; // Use K1 for navigation angular control
 
           // Basic saturation for angular velocity (optional, adjust limits as needed)
           // float max_w = 2.0; // rad/s
           // w = constrain(w, -max_w, max_w);
 
+          // Use the velocity 'v' set by the 'V' command or the default
           float speedR = (v + w * L) / r;
           float speedL = (v - w * L) / r;
 

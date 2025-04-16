@@ -120,7 +120,7 @@ def main():
                             if distance_to_obstacle < threshold:
                                 obstacle_detected = True
                                 break  # No need to check other obstacles if one is close
-                    robot_brain.set_obstacle_detected(obstacle_detected)
+                        robot_brain.set_obstacle_detected(obstacle_detected)
                     else:
                         robot_brain.set_obstacle_detected(False)
                 time.sleep(0.1)
