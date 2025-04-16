@@ -1,7 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
-  <component name="PublishConfigData" autoUpload="Always" serverName="overtherainbot@100.102.161.15:22 password" confirmBeforeUploading="false">
-    <option name="confirmBeforeUploading" value="false" />
+  <component name="PublishConfigData">
     <serverData>
       <paths name="nathan@192.168.1.45:22 password">
         <serverdata>
@@ -13,18 +12,17 @@
       <paths name="overtherainbot@100.102.161.15:22 password">
         <serverdata>
           <mappings>
-            <mapping deploy="/home/overtherainbot/Documents/src" local="$PROJECT_DIR$" />
+            <mapping local="$PROJECT_DIR$" web="/" />
           </mappings>
         </serverdata>
       </paths>
       <paths name="overtherainbot_pi5@100.74.220.74:22 password">
         <serverdata>
           <mappings>
-            <mapping deploy="/home/overtherainbot_pi5/Documents/src" local="$PROJECT_DIR$" />
+            <mapping local="$PROJECT_DIR$" web="/" />
           </mappings>
         </serverdata>
       </paths>
     </serverData>
-    <option name="myAutoUpload" value="ALWAYS" />
   </component>
 </project>
