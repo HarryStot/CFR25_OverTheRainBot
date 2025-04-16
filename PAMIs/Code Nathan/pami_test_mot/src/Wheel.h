@@ -10,6 +10,7 @@ private:
     Encoder encoder;
 
 public:
+	// Better construct
     Wheel(String name, int pinA, int pinB, int pinPWM) : Component(name), motor(name + "_Motor", pinA, pinB, pinPWM), encoder(name + "_Encoder") {
         motor.setSpeed(0);
         motor.setDirection(false, false);

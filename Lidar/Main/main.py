@@ -102,16 +102,25 @@ def main():
                     # Update brain with obstacle data
                     robot_brain.update_obstacles(obstacles)
 
-                    # Also update the obstacle detected flag if necessary
-                    if obstacles and any(
-                            # Check if any obstacle is close to our path
-                            ((obstacle[0] - robot_brain.position_tolerance < position_manager.get_position()[0] <
-                              obstacle[0] + obstacle[2] + robot_brain.position_tolerance) and
-                             (obstacle[1] - robot_brain.position_tolerance < position_manager.get_position()[1] <
-                              obstacle[1] + obstacle[3] + robot_brain.position_tolerance))
-                            for obstacle in obstacles
-                    ):
-                        robot_brain.set_obstacle_detected(True)
+                    # Update the obstacle detected flag based on distance to obstacles
+                    obstacle_detected = False
+                    if obstacles:
+                        robot_x, robot_y = position_manager.get_position()
+                        for obstacle in obstacles:
+                            # Calculate obstacle center
+                            obstacle_center_x = obstacle[0] + obstacle[2] / 2
+                            obstacle_center_y = obstacle[1] + obstacle[3] / 2
+
+                            # Calculate distance to obstacle center
+                            distance_to_obstacle = ((robot_x - obstacle_center_x) ** 2 +
+                                                    (robot_y - obstacle_center_y) ** 2) ** 0.5
+
+                            # Check if distance is within tolerance (including obstacle size)
+                            threshold = robot_brain.position_tolerance + max(obstacle[2], obstacle[3]) / 2
+                            if distance_to_obstacle < threshold:
+                                obstacle_detected = True
+                                break  # No need to check other obstacles if one is close
+                    robot_brain.set_obstacle_detected(obstacle_detected)
                     else:
                         robot_brain.set_obstacle_detected(False)
                 time.sleep(0.1)

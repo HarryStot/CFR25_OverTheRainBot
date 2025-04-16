@@ -218,7 +218,7 @@ class RobotBrain(threading.Thread):
                     return
 
             logger.info(f"Reached location: {current_location.name}")
-
+            self.send_movement_command("S") # Stop the robot
             # If there are tasks to perform, move to EXECUTING_TASK state
             if current_location.tasks:
                 self.current_task_index = 0
