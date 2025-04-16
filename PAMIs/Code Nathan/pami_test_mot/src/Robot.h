@@ -9,7 +9,7 @@
 #include "Trajectory.h"
 #include "MotionController.h"
 #include "RobotState.h"
-#include "UltrasonicSensor.h"
+//#include "UltrasonicSensor.h"
 
 class Robot {
 private:
@@ -45,13 +45,14 @@ public:
 
         Wheel* wheelL = static_cast<Wheel*>(getComponent("wheelL"));
         Wheel* wheelR = static_cast<Wheel*>(getComponent("wheelR"));
-        UltrasonicSensor* sensor = static_cast<UltrasonicSensor*>(getComponent("ultrasonic"));
+        //UltrasonicSensor* sensor = static_cast<UltrasonicSensor*>(getComponent("ultrasonic"));
 
 
-        if (!wheelL || !wheelR || !sensor) return;
+        //if (!wheelL || !wheelR || !sensor) return;
+		if (!wheelL || !wheelR) return;
 
         odometry.update(wheelL->getEncoderValue(), wheelR->getEncoderValue());
-        double distance = sensor->getDistance();
+        //double distance = sensor->getDistance();
 
         switch (state) {
             case RobotState::IDLE:

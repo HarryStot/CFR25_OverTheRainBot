@@ -31,10 +31,10 @@ public:
         this->direction = direction;
         this->enabled = enabled;
         if (enabled) {
-            // digitalWrite(pinA, direction); // for L298n clasic
-            // digitalWrite(pinB, !direction);
-            digitalWrite(pinA, enabled); // for L298n chelou
+            digitalWrite(pinA, direction); // for L298n clasic
             digitalWrite(pinB, !direction);
+            //digitalWrite(pinA, enabled); // for L298n chelou
+            //digitalWrite(pinB, !direction);
         } else {
             digitalWrite(pinA, LOW);
             digitalWrite(pinB, LOW);

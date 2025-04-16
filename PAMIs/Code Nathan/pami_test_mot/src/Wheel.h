@@ -19,6 +19,9 @@ public:
     // TODO Change code
     void setSpeed(int speed) { motor.setSpeed(speed); }
     int getSpeed() const { return motor.getSpeed(); }
+	
+	void setDirection(bool enabled, bool direction) { motor.setDirection(enabled, direction); }
+	void getDirection(bool &enabled, bool &direction) const { motor.getDirection(enabled, direction); }
 
     void updateEncoder(bool a, bool b) { encoder.update_count(a, b); }
     int getEncoderValue() const { return encoder.getTicks(); }
