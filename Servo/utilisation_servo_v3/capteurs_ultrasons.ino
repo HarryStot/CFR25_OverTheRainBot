@@ -1,6 +1,6 @@
 // Capteur 1
 const int trigPin1 = 4;
-const int echoPin1 = 18; // Pin d'interruption, garder les bonnes pins echo
+const int echoPin1 = 18;
 
 // Capteur 2
 const int trigPin2 = 5;
@@ -26,11 +26,7 @@ float prevDist1 = 0;
 float prevDist2 = 0;
 float prevDist3 = 0;
 
-const float distance_au_sol = 45.0;           // en cm
-const float seuil_detect_obstacle = 4.0;      // tolérance autour de la distance au sol
-
-float borne_min = distance_au_sol - seuil_detect_obstacle;
-float borne_max = distance_au_sol + seuil_detect_obstacle;
+float distance_detect = 40.0;
 
 void setup() {
   Serial.begin(115200);
@@ -75,9 +71,10 @@ void loop() {
   interrupts();
 
   // Vérification hors plage
-  bool obstacle1 =  (dist1 < borne_min || dist1 > borne_max);
-  bool obstacle2 = (dist2 < borne_min || dist2 > borne_max);
-  bool obstacle3 = (dist3 < borne_min || dist3 > borne_max);
+  //bool obstacle1 =  (dist1 < borne_min || dist1 > borne_max);
+  bool obstacle1 = (dist1 < distance_detect);
+  bool obstacle2 = (dist2 < distance_detect);
+  bool obstacle3 = (dist3 < distance_detect);
 
   if (obstacle1 || obstacle2 || obstacle3) {
     Serial.print("us,1:");
