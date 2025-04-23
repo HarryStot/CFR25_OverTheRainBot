@@ -15,12 +15,13 @@ logger = logging.getLogger(__name__)
 
 class RobotState(Enum):
     """States for the robot state machine"""
-    START = 0
-    IDLE = 1
-    NAVIGATING = 2
-    EXECUTING_TASK = 3
-    ERROR = 4
-    # TODO: Add more states as needed like PAUSED, RESUMING, etc.
+    TEAM_SELECTION = 0     # Initial state to select team (blue/yellow)
+    WAITING_FOR_START = 1  # Waiting for pull switch
+    NAVIGATING = 2         # Moving to a target location
+    EXECUTING_TASK = 3     # Performing a task at the current location
+    RETURNING_TO_END = 4   # Going to the end zone when time is almost up
+    COMPLETED = 5          # Mission completed
+    ERROR = 6              # Error state
 
 
 class Task:
@@ -63,17 +64,27 @@ class RobotBrain(threading.Thread):
         self.action_port = action_port
         self.baud_rate = baud_rate
         self.stop_event = stop_event or threading.Event()
-        self.daemon = True
-
-        # Initialize serial ports
+        self.daemon = True        # Initialize serial ports
         self.movement_ser = None
         self.action_ser = None
 
         # State machine variables
-        self.current_state = RobotState.NAVIGATING
+        self.current_state = RobotState.TEAM_SELECTION
         self.previous_state = None
         self.state_changed = threading.Event()
         self.avoidance_enabled = False
+        
+        # Team and timing variables
+        self.is_blue_team = None  # True for blue team, False for yellow team
+        self.mission_start_time = 0  # When the pull switch was activated
+        self.mission_duration = 85  # 85 seconds total mission time
+        self.end_zone_time = 15  # How many seconds before end to start returning
+        
+        # Team and timing variables
+        self.is_blue_team = None  # True for blue team, False for yellow team
+        self.mission_start_time = 0  # When the pull switch was activated
+        self.mission_duration = 85  # 85 seconds total mission time
+        self.end_zone_time = 15  # How many seconds before end to start returning
 
         # Mission variables
         self.locations = []
@@ -92,12 +103,12 @@ class RobotBrain(threading.Thread):
         self.task_timeout = 20  # seconds
 
         # Lock for thread safety
-        self.lock = threading.RLock()
-
-        # GPIO configuration
-        self.gpio_pin = 17  # GPIO pin for pull switch
+        self.lock = threading.RLock()        # GPIO configuration
         GPIO.setmode(GPIO.BCM)
-        GPIO.setup(self.gpio_pin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+        self.team_select_pin = 17  # GPIO pin for team selection switch
+        self.pull_switch_pin = 18   # GPIO pin for pull switch to start
+        GPIO.setup(self.team_select_pin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+        GPIO.setup(self.pull_switch_pin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
 
         # Initialize potential field navigation
         self.potential_nav = PotentialFieldNavigation()
@@ -165,6 +176,69 @@ class RobotBrain(threading.Thread):
         logger.info("Go!")
         self.set_state(RobotState.IDLE)
 
+    def handle_team_selection_state(self):
+        """Handle the TEAM_SELECTION state - determine team based on switch position"""
+        # Check team selection switch
+        if GPIO.input(self.team_select_pin) == GPIO.HIGH:
+            self.is_blue_team = True
+            logger.info("Blue team selected")
+        else:
+            self.is_blue_team = False
+            logger.info("Yellow team selected")
+
+        # Load mission locations based on team
+        self.load_team_missions()
+        
+        # Move to waiting for start
+        self.set_state(RobotState.WAITING_FOR_START)
+
+    def handle_waiting_for_start_state(self):
+        """Handle the WAITING_FOR_START state - wait for pull switch activation"""
+        # Check if pull switch has been activated
+        if GPIO.input(self.pull_switch_pin) == GPIO.LOW:
+            logger.info("Pull switch activated! Starting mission...")
+            self.mission_start_time = time.time()
+            
+            # Start the mission with the first location
+            self.current_location_index = 0
+            self.current_task_index = -1
+            
+            # Move to navigating state to go to first location
+            self.set_state(RobotState.NAVIGATING)
+            self.navigation_start_time = time.time()
+        else:
+            # Still waiting for pull switch activation
+            time.sleep(0.1)
+
+    def load_team_missions(self):
+        """Load mission locations based on selected team"""
+        self.clear_locations()
+        
+        if self.is_blue_team:
+            # Blue team mission waypoints
+            self.add_location(Location("BlueStart", 30, 30, 0))
+            self.add_location(Location("BlueActionPoint1", 50, 70, 90, [
+                Task("GrabBlueItem", "GRAB", {"S": 1}, 3)
+            ]))
+            self.add_location(Location("BlueActionPoint2", 90, 80, 180, [
+                Task("DropBlueItem", "DROP", {"S": 1}, 2)
+            ]))
+            # Add more blue team locations as needed
+            self.add_location(Location("BlueEndZone", 180, 30, 270))
+        else:
+            # Yellow team mission waypoints
+            self.add_location(Location("YellowStart", 270, 30, 180))
+            self.add_location(Location("YellowActionPoint1", 250, 70, 90, [
+                Task("GrabYellowItem", "GRAB", {"S": 2}, 3)
+            ]))
+            self.add_location(Location("YellowActionPoint2", 210, 80, 0, [
+                Task("DropYellowItem", "DROP", {"S": 2}, 2)
+            ]))
+            # Add more yellow team locations as needed
+            self.add_location(Location("YellowEndZone", 120, 30, 270))
+            
+        logger.info(f"Loaded {len(self.locations)} locations for {'blue' if self.is_blue_team else 'yellow'} team")
+
     def handle_idle_state(self):
         """Handle the IDLE state"""
         if self.locations and self.current_location_index < len(self.locations) - 1:
@@ -176,12 +250,21 @@ class RobotBrain(threading.Thread):
             self.navigation_start_time = time.time()
         else:
             # No more locations, wait for new ones
-            time.sleep(0.5)
-
+            time.sleep(0.5)    
+            
     def handle_navigating_state(self):
         """Handle the NAVIGATING state with potential field navigation"""
         current_location = self.locations[self.current_location_index]
 
+        # Check if we need to return to end zone based on time
+        elapsed_time = time.time() - self.mission_start_time
+        remaining_time = self.mission_duration - elapsed_time
+        
+        if remaining_time <= self.end_zone_time:
+            logger.warning(f"Only {remaining_time:.1f} seconds remaining! Heading to end zone.")
+            self.set_state(RobotState.RETURNING_TO_END)
+            return
+            
         # Check if navigation timed out
         # if time.time() - self.navigation_start_time > self.navigation_timeout:
         #     logger.warning(f"Navigation to {current_location.name} timed out")
@@ -277,10 +360,20 @@ class RobotBrain(threading.Thread):
         elif not self.avoidance_enabled:
             # Simple direct navigation without potential field
             self.send_movement_command(f"GX{current_location.x:.2f}Y{current_location.y:.2f}Z{current_z:.2f}")
-            logger.info(f"Directly navigating to {current_location.name}, distance: {distance:.2f}")
-
+            logger.info(f"Directly navigating to {current_location.name}, distance: {distance:.2f}")    
+            
     def handle_executing_task_state(self):
         """Handle the EXECUTING_TASK state"""
+        # Check if we need to return to end zone based on time
+        elapsed_time = time.time() - self.mission_start_time
+        remaining_time = self.mission_duration - elapsed_time
+        
+        if remaining_time <= self.end_zone_time:
+            logger.warning(f"Only {remaining_time:.1f} seconds remaining! Abandoning task and heading to end zone.")
+            self.send_movement_command("S")  # Stop the robot
+            self.set_state(RobotState.RETURNING_TO_END)
+            return
+        
         current_location = self.locations[self.current_location_index]
         current_task = current_location.tasks[self.current_task_index]
 
@@ -309,7 +402,46 @@ class RobotBrain(threading.Thread):
                 self.set_state(RobotState.IDLE)
         else:
             # Task still in progress
-            time.sleep(0.1)
+            time.sleep(0.1)    
+
+    def handle_returning_to_end_state(self):
+        """Handle the RETURNING_TO_END state - go to end zone before time runs out"""
+        # Get the end zone location (last location in the list)
+        end_location = self.locations[-1]
+        
+        # Get current position
+        current_x, current_y, current_z = position_manager.get_position()
+        distance = ((current_x - end_location.x) ** 2 +
+                   (current_y - end_location.y) ** 2) ** 0.5
+        
+        # Check if we've reached the end zone
+        if distance <= self.position_tolerance:
+            logger.info("Reached end zone! Mission completed.")
+            self.send_movement_command("S")  # Stop the robot
+            self.set_state(RobotState.COMPLETED)
+            return
+            
+        # Continue navigating to end zone
+        self.send_movement_command(f"GX{end_location.x:.2f}Y{end_location.y:.2f}Z{end_location.orientation:.2f}")
+        logger.info(f"Returning to end zone, distance: {distance:.2f}")
+        
+        # Check if we're about to run out of time
+        elapsed_time = time.time() - self.mission_start_time
+        remaining_time = self.mission_duration - elapsed_time
+        
+        if remaining_time < 2:
+            # Almost out of time, emergency stop
+            logger.warning("Mission time almost up! Performing emergency stop.")
+            self.send_movement_command("S")
+            self.set_state(RobotState.COMPLETED)
+
+    def handle_completed_state(self):
+        """Handle the COMPLETED state - mission is done"""
+        # Just stop the robot and wait
+        self.send_movement_command("S")
+        time.sleep(0.5)
+        # Idle until shutdown
+        pass
 
     def handle_error_state(self):
         """Handle the ERROR state"""
@@ -385,6 +517,10 @@ class RobotBrain(threading.Thread):
                     self.handle_navigating_state()
                 elif self.current_state == RobotState.EXECUTING_TASK:
                     self.handle_executing_task_state()
+                elif self.current_state == RobotState.RETURNING_TO_END:
+                    self.handle_returning_to_end_state()
+                elif self.current_state == RobotState.COMPLETED:
+                    self.handle_completed_state()
                 elif self.current_state == RobotState.ERROR:
                     self.handle_error_state()
 

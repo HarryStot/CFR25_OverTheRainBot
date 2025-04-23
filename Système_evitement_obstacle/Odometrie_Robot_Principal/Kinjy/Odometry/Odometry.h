@@ -12,6 +12,7 @@ public:
     Odometry() {}
     Odometry(float L, float r);
     void updateOdometry(float posR, float posL);
+    void setPosition(float new_x, float new_y, float new_theta); // New method to set position
 };
 
 #endif
