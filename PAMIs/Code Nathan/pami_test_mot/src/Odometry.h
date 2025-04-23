@@ -8,6 +8,7 @@ private:
     double x, y, theta;
     double wheel_radius;
     double wheel_base;
+	double old_right_tick, old_left_tick;
 
 public:
     Odometry(double wheel_radius, double wheel_base)
@@ -15,10 +16,16 @@ public:
           wheel_radius(wheel_radius), wheel_base(wheel_base) {}
 
     void update(double left_ticks, double right_ticks) {
-        double left_dist = left_ticks * (2 * PI * wheel_radius) / 360.0;
-        double right_dist = right_ticks * (2 * PI * wheel_radius) / 360.0;
+		double d_left_tick = left_ticks - old_left_tick;
+		double d_right_tick = right_ticks - old_right_tick;
+		old_left_tick = left_ticks;
+		old_right_tick = right_ticks;
+		
+        double left_dist = d_left_tick * (2 * PI * wheel_radius) / 355.0;
+        double right_dist = d_right_tick * (2 * PI * wheel_radius) / 355.0;
 
         double delta_d = (left_dist + right_dist) / 2.0;
+		
         double delta_theta = (right_dist - left_dist) / wheel_base;
 
         x += delta_d * cos(theta);

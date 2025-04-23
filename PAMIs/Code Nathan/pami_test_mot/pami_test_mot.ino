@@ -1,42 +1,71 @@
-#include "src/Wheel.h"
+#include "src/Robot.h"
 
+#define ENCODER_L_B 11
 #define ENCODER_L_A 2
 #define ENCODER_L_B 11
 #define ENCODER_R_A 3
 #define ENCODER_R_B 12
 
-Wheel* wheel;
+const double WHEEL_RADIUS = 0.04;
+const double WHEEL_BASE = 0.10;
 
-Encoder encoder_L("encoder_L");
-Encoder encoder_R("encoder_R");
+Robot* robot = nullptr;
 
-unsigned long last_time = 0;
+//Robot robot(WHEEL_RADIUS, WHEEL_BASE);
+
+Wheel* wheelL;
+Wheel* wheelR;
 
 void leftEncoderISR() {
-    wheel->updateEncoder(digitalRead(ENCODER_L_A), digitalRead(ENCODER_L_B));
+    wheelL->updateEncoder(digitalRead(ENCODER_L_A), digitalRead(ENCODER_L_B));
+	//Serial.print("Left Encoder Count: ");
+    //Serial.println(wheelL->getEncoderValue());
 }
 
 void rightEncoderISR() {
-    encoder_R.update_count(digitalRead(ENCODER_R_A), digitalRead(ENCODER_R_B));
+    wheelR->updateEncoder(digitalRead(ENCODER_R_A), digitalRead(ENCODER_R_B));
+	//Serial.print("Right Encoder Count: ");
+    //Serial.println(wheelR->getEncoderValue());
 }
-void setup() {
-    Serial.begin(115200);
 
-    wheel = new Wheel("wheel", 4, 5, 6);
+void setup() {
+	Serial.begin(115200);
+
+	robot = new Robot(WHEEL_RADIUS, WHEEL_BASE);
+	
+	Serial.println("Robot initialized.");
+
+
+    wheelL = new Wheel("wheelL", 4, 5, 10);
+	wheelR = new Wheel("wheelR", 6, 7, 9);
+	
+	robot->addComponent("wheelL", wheelL);
+    robot->addComponent("wheelR", wheelR);
 
     pinMode(ENCODER_L_A, INPUT);
     pinMode(ENCODER_L_B, INPUT);
+	pinMode(ENCODER_R_A, INPUT);
+    pinMode(ENCODER_R_B, INPUT);
 
     pinMode(ENCODER_R_A, INPUT);
     pinMode(ENCODER_R_B, INPUT);
     
     attachInterrupt(digitalPinToInterrupt(ENCODER_L_A), leftEncoderISR, RISING);
-    attachInterrupt(digitalPinToInterrupt(ENCODER_R_A), rightEncoderISR, RISING);
+	attachInterrupt(digitalPinToInterrupt(ENCODER_R_A), rightEncoderISR, RISING);
+	
+	robot->addWaypoint(0.3, 0, 0);
 }
 
 void loop() {
-    wheel->update();
-    last_time = millis();
-    
-    Serial.println(wheel->getEncoderValue());
+	robot->updateAll();
+	
+    if (Serial.available()) {
+        char c = Serial.read();
+        if (c == 's') {
+            robot->stop();
+        }
+    }
+	
+	// TODO: Add manual control
+    delay(10);
 }

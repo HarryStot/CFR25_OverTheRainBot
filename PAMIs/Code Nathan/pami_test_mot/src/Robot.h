@@ -4,12 +4,12 @@
 #include <Arduino.h>
 #include <LinkedList.h>
 #include "Wheel.h"
-#include "Sensor.h"
+//#include "Sensor.h"
 #include "Odometry.h"
 #include "Trajectory.h"
 #include "MotionController.h"
 #include "RobotState.h"
-#include "UltrasonicSensor.h"
+//#include "UltrasonicSensor.h"
 
 class Robot {
 private:
@@ -45,13 +45,14 @@ public:
 
         Wheel* wheelL = static_cast<Wheel*>(getComponent("wheelL"));
         Wheel* wheelR = static_cast<Wheel*>(getComponent("wheelR"));
-        // UltrasonicSensor* sensor = static_cast<UltrasonicSensor*>(getComponent("ultrasonic"));
+        //UltrasonicSensor* sensor = static_cast<UltrasonicSensor*>(getComponent("ultrasonic"));
 
 
-        if (!wheelL || !wheelR || !sensor) return;
+        //if (!wheelL || !wheelR || !sensor) return;
+		if (!wheelL || !wheelR) return;
 
         odometry.update(wheelL->getEncoderValue(), wheelR->getEncoderValue());
-        double distance = sensor->getDistance();
+        //double distance = sensor->getDistance();
 
         switch (state) {
             case RobotState::IDLE:
@@ -61,31 +62,50 @@ public:
                 break;
 
             case RobotState::NAVIGATING:
-                if (distance < obstacleThreshold) {
+                /*if (distance < obstacleThreshold) {
                     Serial.println("Obstacle detected! Avoiding...");
                     state = RobotState::AVOIDING;
                     break;
-                }
-
+                }*/
+			
                 if (!trajectory.isFinished()) {
                     Waypoint target = trajectory.getNextWaypoint();
                     double leftSpeed, rightSpeed;
 
                     motionController.computeSpeed(
                         odometry.getX(), odometry.getY(), odometry.getTheta(),
-                        target, leftSpeed, rightSpeed
-                    );
-
-                    wheelL->setSpeed(leftSpeed);
-                    wheelR->setSpeed(rightSpeed);
-
-                    double distanceToTarget = sqrt(pow(target.x - odometry.getX(), 2) +
+                        target, leftSpeed, rightSpeed);
+					
+					int pwmLeft = constrain(int(fabs(leftSpeed) * 255.0 / 1.0), 0, 255);
+					int pwmRight = constrain(int(fabs(rightSpeed) * 255.0 / 1.0), 0, 255);
+					
+					bool dirL = leftSpeed >= 0;
+					bool dirR = rightSpeed >= 0;
+					
+					// Met à jour les moteurs avec les vitesses calculées
+					wheelL->setSpeed(pwmLeft);   
+					wheelR->setSpeed(pwmRight);  
+					
+					wheelL->setDirection(true, dirL);
+					wheelR->setDirection(true, dirR);
+					
+					// Déplace les moteurs
+					wheelL->update();
+					wheelR->update();	
+					
+					// Debug pour vérifier les vitesses
+					Serial.print("Left Speed: ");
+					Serial.print(leftSpeed);
+					Serial.print(" | Right Speed: ");
+					Serial.println(rightSpeed);
+					
+					double distanceToTarget = sqrt(pow(target.x - odometry.getX(), 2) +
                                                    pow(target.y - odometry.getY(), 2));
 
                     if (distanceToTarget < 0.05) {
                         trajectory.advanceWaypoint();
                         taskStartTime = millis(); // Start task timer
-                        state = RobotState::EXECUTING_TASK;
+                        state = RobotState::STOPPED;
                     }
                 } else {
                     state = RobotState::STOPPED;
@@ -93,7 +113,7 @@ public:
                 break;
 
             case RobotState::AVOIDING:
-                Serial.println("Avoiding obstacle...");
+                /*Serial.println("Avoiding obstacle...");
                 wheelL->setSpeed(-100);
                 wheelR->setSpeed(100);
                 delay(500); // Rotate for 0.5 sec
@@ -105,6 +125,10 @@ public:
                     Serial.println("Path cleared. Resuming...");
                     state = RobotState::NAVIGATING;
                 }
+                break;*/
+				
+				Serial.println("Skipping obstacle (no sensor available). Resuming navigation.");
+                state = RobotState::NAVIGATING;
                 break;
 
             case RobotState::EXECUTING_TASK:
@@ -116,8 +140,8 @@ public:
 
             case RobotState::STOPPED:
                 Serial.println("Mission completed!");
-                wheelL->setSpeed(0);
-                wheelR->setSpeed(0);
+                wheelL->update();
+                wheelR->update();
                 break;
         }
     }
