@@ -20,13 +20,18 @@ public:
         double errorX = target.x - currentX;
         double errorY = target.y - currentY;
         double errorTheta = atan2(errorY, errorX) - currentTheta;
-        
-        // TODO : Change formula
-        double forwardSpeed = sqrt(errorX * errorX + errorY * errorY) * speedGain;
-        double rotationSpeed = errorTheta * rotationGain;
+		
+		double forwardSpeed = sqrt(errorX * errorX + errorY * errorY) * speedGain;
+		double rotationSpeed = (errorTheta) * rotationGain;
 
         leftSpeed = forwardSpeed - rotationSpeed;
-        rightSpeed = forwardSpeed + rotationSpeed;
+		rightSpeed = forwardSpeed + rotationSpeed;
+			
+		// Debug : affichage des vitesses
+		Serial.print("Left Speed: ");
+		Serial.print(leftSpeed);
+		Serial.print(" | Right Speed: ");
+		Serial.println(rightSpeed);
     }
 };
 
