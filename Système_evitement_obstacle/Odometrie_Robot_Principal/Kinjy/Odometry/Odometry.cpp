@@ -6,30 +6,28 @@ Odometry::Odometry(float L, float r) {
 }
 
 void Odometry::updateOdometry(float posR, float posL) {
-    DR = r * (posR - posR_prec) * pi / 180;
-    DL = r * (posL - posL_prec) * pi / 180;
+    DR = r * (this.posR - this.posR_prec) * pi / 180;
+    DL = r * (this.posL - this.posL_prec) * pi / 180;
     DC = (DR + DL) / 2;
 
-    x = x_prec + DC * cos(theta);
-    y = y_prec + DC * sin(theta);
+    this.x = this.x_prec + DC * cos(theta);
+    this.y = this.y_prec + DC * sin(theta);
 
-    theta = theta_prec + (DR - DL) / (2 * L);
-    theta_prec = theta;
+    this.theta = this.theta_prec + (DR - DL) / (2 * L);
+    this.theta_prec = this.theta;
 
-    x_prec = x;
-    y_prec = y;
+    this.x_prec = this.x;
+    this.y_prec = this.y;
 
-    posL_prec = posL;
-    posR_prec = posR;
+    this.posL_prec = this.posL;
+    this.posR_prec = this.posR;
 }
 
 void Odometry::setPosition(float new_x, float new_y, float new_theta) {
-    // Update all position variables
     x = new_x;
     y = new_y;
     theta = new_theta;
     
-    // Update previous values to avoid jumps in the next odometry calculation
     x_prec = new_x;
     y_prec = new_y;
     theta_prec = new_theta;

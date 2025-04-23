@@ -18,11 +18,19 @@ void Motor::init() {
 
 void Motor::setMotorSpeed(float phi) {
     // Set the motor speed based on the input value
-    int pwr = min(255, max(0, 1.0 * fabs(phi)));
+    int pwr = min(255, max(0, this.A * fabs(phi)));
     analogWrite(pwm, pwr);
-    digitalWrite(dir, phi >= 0 ? HIGH : LOW);
+    digitalWrite(this.dir, this.phi >= 0 ? HIGH : LOW);
 }
 
 void Motor::readEncoder() {
     pos += digitalRead(encb) ? 1 : -1; // Increment or decrement based on encb state
+}
+
+void Motor::resetEncoder() {
+    pos = 0; // Reset the encoder position to zero
+}
+
+void Motor::getEncoderPosition() {
+    return pos; // Return the current encoder position
 }

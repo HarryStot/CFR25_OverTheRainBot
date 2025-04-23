@@ -64,21 +64,17 @@ class RobotBrain(threading.Thread):
         self.action_port = action_port
         self.baud_rate = baud_rate
         self.stop_event = stop_event or threading.Event()
-        self.daemon = True        # Initialize serial ports
+        self.daemon = True
+
+        # Initialize serial ports
         self.movement_ser = None
         self.action_ser = None
 
         # State machine variables
-        self.current_state = RobotState.TEAM_SELECTION
+        self.current_state = RobotState.NAVIGATING
         self.previous_state = None
         self.state_changed = threading.Event()
         self.avoidance_enabled = False
-        
-        # Team and timing variables
-        self.is_blue_team = None  # True for blue team, False for yellow team
-        self.mission_start_time = 0  # When the pull switch was activated
-        self.mission_duration = 85  # 85 seconds total mission time
-        self.end_zone_time = 15  # How many seconds before end to start returning
         
         # Team and timing variables
         self.is_blue_team = None  # True for blue team, False for yellow team
@@ -251,7 +247,7 @@ class RobotBrain(threading.Thread):
         else:
             # No more locations, wait for new ones
             time.sleep(0.5)    
-            
+    
     def handle_navigating_state(self):
         """Handle the NAVIGATING state with potential field navigation"""
         current_location = self.locations[self.current_location_index]

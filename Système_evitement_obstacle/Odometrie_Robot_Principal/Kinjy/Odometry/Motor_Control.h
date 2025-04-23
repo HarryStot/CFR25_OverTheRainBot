@@ -6,6 +6,7 @@
 class Motor {
 private:
     byte enca, encb, pwm, dir;
+    float A = 1.0; // Coefficient for speed calculation
 public:
     volatile int pos;
 
@@ -13,6 +14,8 @@ public:
     void init();
     void setMotorSpeed(float phi);
     void readEncoder();
+    void resetEncoder();
+    void getEncoderPosition();
 };
 
 #endif

@@ -10,6 +10,7 @@ from robot_brain import RobotBrain, Location, Task, RobotState
 from robot_interface import RobotInterface
 import signal
 from position_manager import position_manager
+from lcd_interface import LCDInterface, Team
 
 debug = True
 # Configure logging
@@ -38,15 +39,24 @@ def main():
     end_event = threading.Event()
     interface_stop_event = threading.Event()
     brain_stop_event = threading.Event()
+    lcd_stop_event = threading.Event()
 
     lidar_thread = None
     robot_interface = None
     robot_brain = None
-
+    lcd_interface = None
+    
     try:
+        # Set up the team color (YELLOW or BLUE)
+        team_color = Team.YELLOW  # Change to Team.BLUE for blue team
         # Logger setup
         logger.info("Starting main program...")
         logger.debug("Debug mode is enabled")
+        
+        # Initialize LCD interface
+        lcd_interface = LCDInterface(stop_event=lcd_stop_event, team=team_color)
+        lcd_interface.start()
+        logger.info("LCD Interface started")
 
         # Start the robot interface
         robot_interface = RobotInterface(serial_port='/dev/ttyACM0', baud_rate=115200,
@@ -127,19 +137,29 @@ def main():
 
         # Start obstacle update thread
         obstacle_thread = threading.Thread(target=update_brain_obstacles, daemon=True)
-        obstacle_thread.start()
-
-        # Keep main thread running until CTRL+C
+        obstacle_thread.start()        # Keep main thread running until CTRL+C
         while running:
             # Print the current state for debugging
             if robot_brain:
                 logger.info(f"Current state: {robot_brain.current_state}")
+                
+                # Update LCD with current state information
+                if lcd_interface:
+                    # Convert RobotState enum to string for display
+                    state_str = str(robot_brain.current_state).split('.')[-1]  # Extract just the state name
+                    lcd_interface.update_state(state_str)
+                
                 if robot_brain.current_state == RobotState.NAVIGATING:
                     if robot_brain.current_location_index >= 0:
                         loc = robot_brain.locations[robot_brain.current_location_index]
                         pos = position_manager.get_position()
                         distance = ((pos[0] - loc.x) ** 2 + (pos[1] - loc.y) ** 2) ** 0.5
                         logger.info(f"Navigating to {loc.name}, distance: {distance:.2f}")
+                        
+                        # Update LCD with target information
+                        if lcd_interface:
+                            lcd_interface.update_target(f"{loc.name} ({distance:.1f})")
+                            
                 elif robot_brain.current_state == RobotState.EXECUTING_TASK:
                     if (robot_brain.current_location_index >= 0 and
                             robot_brain.current_task_index >= 0):
@@ -147,6 +167,10 @@ def main():
                         task = loc.tasks[robot_brain.current_task_index]
                         elapsed = time.time() - robot_brain.task_start_time
                         logger.info(f"Executing task: {task.name} at {loc.name}, elapsed: {elapsed:.1f}s")
+                        
+                        # Update LCD with task information
+                        if lcd_interface:
+                            lcd_interface.update_task(f"{task.name} ({elapsed:.1f}s)")
 
             time.sleep(1)
 

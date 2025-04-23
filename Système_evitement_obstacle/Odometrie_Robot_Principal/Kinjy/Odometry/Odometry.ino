@@ -2,17 +2,17 @@
 #include "Odometry.h"
 #include <math.h> // Include for M_PI
 
-#define ENCAD 19 // Blanc 
-#define ENCBD 18 // Vert 
+#define ENCAD 18 // Vert 
+#define ENCBD 19 // Blanc
 #define PWMD 11  // 
 #define DIRD 13  // 
-#define ENCAG 21 // Vert 
-#define ENCBG 20 // Blanc
+#define ENCAG 21 // Blanc
+#define ENCBG 20 // Vert
 #define PWMG 3   // 
 #define DIRG 12  // 
 
-float L = 0.175 / 2;
-float r = 0.065 / 2;
+float L = 0.322 / 2;
+float r = 0.083 / 2;
 
 Motor motorR(ENCAD, ENCBD, PWMD, DIRD);
 Motor motorL(ENCAG, ENCBG, PWMG, DIRG);
@@ -20,9 +20,9 @@ Odometry robot(L, r);
 
 float v = 10.0, w;
 float x_goal = 0, y_goal = 1, theta_goal = M_PI/2;
-float K1 = 120; // Tuning parameter for angular speed during navigation
+float K1 = 2.5; // Tuning parameter for angular speed during navigation
 float K_align = 10.0; // Tuning parameter for angular speed during alignment
-float eps = 0.05; // Position tolerance
+float eps = 0.001; // Position tolerance
 float alignment_tolerance = 0.05; // Angular tolerance for alignment (radians)
 
 // Added debug flag
@@ -59,6 +59,7 @@ void setup() {
     Serial.println("  P - Request position");
     Serial.println("  D1 - Debug mode on");
     Serial.println("  D0 - Debug mode off");
+    Serial.println("  ENC[1/2] - Return encoder position (1 for motorR, 2 for motorL)");
 
     motorR.init();
     motorL.init();
@@ -176,7 +177,18 @@ void loop() {
         Serial.println(v);
       }
     }
+
+    // Parse encoder position request (ENC1 or ENC2)
+    if (cmd.indexOf("ENC1") != -1) {
+      Serial.print("ENC1: ");
+      Serial.println(motorR.pos);
+    } else if (cmd.indexOf("ENC2") != -1) {
+      Serial.print("ENC2: ");
+      Serial.println(motorL.pos);
+    }
+
   }
+
 
   robot.updateOdometry(motorR.pos, motorL.pos);
   
