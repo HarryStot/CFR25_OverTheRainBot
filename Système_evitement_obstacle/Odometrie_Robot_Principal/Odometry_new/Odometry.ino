@@ -3,20 +3,20 @@
 
 #define ENCAD 19
 #define ENCBD 18
-#define PWMD 11
-#define DIRD 13
+#define PWMD 3
+#define DIRD 12
 #define ENCAG 21
 #define ENCBG 20
-#define PWMG 3
-#define DIRG 12
+#define PWMG 11
+#define DIRG 13
 
 Motor motorR(ENCAD, ENCBD, PWMD, DIRD);
 Motor motorL(ENCAG, ENCBG, PWMG, DIRG);
-Odometry robot(0.245 / 2, 0.065 / 2);
+Odometry robot(0.185 / 2, 0.084 / 2);
 
 float x_goal = 0, y_goal = 0, theta_goal = 0;
-float K1 = 2;
-float eps = 0.1;
+float K1 = 120;
+float eps = 0.05;
 
 void setup() {
     Serial.begin(9600);
