@@ -6,7 +6,7 @@
 
 class Motor : public Component {
 private:
-    int speed;
+    int speed; // Speed in m/s ?
     bool direction;
     bool enabled;
     int pinA;

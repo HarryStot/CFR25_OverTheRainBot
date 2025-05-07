@@ -1,16 +1,14 @@
 #!/usr/bin/env python3
 
-import time
-import threading
-from lidar_interface import LidarThread
 import logging
-import threading
-import sys
-from robot_brain import RobotBrain, Location, Task, RobotState
-from robot_interface import RobotInterface
 import signal
+import threading
+import time
+
+from lidar_interface import LidarThread
 from position_manager import position_manager
-from lcd_interface import LCDInterface, Team
+from robot_brain import RobotBrain, Location, RobotState
+from robot_interface import RobotInterface
 
 debug = True
 # Configure logging
@@ -48,15 +46,15 @@ def main():
     
     try:
         # Set up the team color (YELLOW or BLUE)
-        team_color = Team.YELLOW  # Change to Team.BLUE for blue team
+        # team_color = Team.YELLOW  # Change to Team.BLUE for blue team
         # Logger setup
         logger.info("Starting main program...")
         logger.debug("Debug mode is enabled")
         
         # Initialize LCD interface
-        lcd_interface = LCDInterface(stop_event=lcd_stop_event, team=team_color)
-        lcd_interface.start()
-        logger.info("LCD Interface started")
+        # lcd_interface = LCDInterface(stop_event=lcd_stop_event, team=team_color)
+        # lcd_interface.start()
+        # logger.info("LCD Interface started")
 
         # Start the robot interface
         robot_interface = RobotInterface(serial_port='/dev/ttyACM0', baud_rate=115200,
@@ -97,7 +95,7 @@ def main():
         robot_brain.start()
         logger.info("RobotBrain started")
 
-        # Show initial position and target
+        # Show the initial position and target
         pos = position_manager.get_position()
         target = position_manager.get_target()
         logger.info(f"Initial position: {pos}, target: {target}")
@@ -109,10 +107,10 @@ def main():
                 if lidar_thread:
                     # Get obstacles from lidar thread
                     obstacles = lidar_thread.get_obstacles()
-                    # Update brain with obstacle data
+                    # Update the brain with obstacle data
                     robot_brain.update_obstacles(obstacles)
 
-                    # Update the obstacle detected flag based on distance to obstacles
+                    # Update the obstacle_detected flag based on distance to obstacles
                     obstacle_detected = False
                     if obstacles:
                         robot_x, robot_y = position_manager.get_position()

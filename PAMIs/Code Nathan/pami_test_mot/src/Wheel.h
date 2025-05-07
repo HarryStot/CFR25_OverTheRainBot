@@ -11,7 +11,7 @@ private:
 
 public:
 	// Better construct
-    Wheel(String name, int pinA, int pinB, int pinPWM) : Component(name), motor(new Motor(name + "_Motor", pinA, pinB, pinPWM, 1.5)), encoder(name + "_Encoder") {
+    Wheel(String name, int pinA, int pinB, int pinPWM) : Component(name), motor(new Motor(name + "_Motor", pinA, pinB, pinPWM, 0.5)), encoder(name + "_Encoder") {
         motor->setSpeed(0);
         motor->setDirection(false, false);
     }
@@ -26,6 +26,8 @@ public:
     int getEncoderValue() const { return encoder.getTicks(); }
 
     void resetEncoder() { encoder.reset(); }
+
+    Encoder getEncoder() const { return encoder; }
 
     void update() override {
         motor->update();

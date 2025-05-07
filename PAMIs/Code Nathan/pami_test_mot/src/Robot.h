@@ -76,15 +76,15 @@ public:
                         odometry.getX(), odometry.getY(), odometry.getTheta(),
                         target, leftSpeed, rightSpeed);
 					
-					int pwmLeft = constrain(int(fabs(leftSpeed) * 255.0 / 1.0), 0, 255);
-					int pwmRight = constrain(int(fabs(rightSpeed) * 255.0 / 1.0), 0, 255);
+					// int pwmLeft = constrain(int(fabs(leftSpeed) * 255.0 / 1.0), 0, 255);
+					// int pwmRight = constrain(int(fabs(rightSpeed) * 255.0 / 1.0), 0, 255);
 					
 					bool dirL = leftSpeed >= 0;
 					bool dirR = rightSpeed >= 0;
 					
 					// Met à jour les moteurs avec les vitesses calculées
-					wheelL->setSpeed(pwmLeft);   
-					wheelR->setSpeed(pwmRight);  
+					wheelL->setSpeed(leftSpeed);   
+					wheelR->setSpeed(rightSpeed);  
 					
 					wheelL->setDirection(true, dirL);
 					wheelR->setDirection(true, dirR);

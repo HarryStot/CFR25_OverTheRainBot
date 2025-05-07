@@ -9,21 +9,18 @@ import re
 
 logger = logging.getLogger(__name__)
 
+
 class RobotInterface(threading.Thread):
     """Update robot position and target from serial data"""
 
-    def __init__(self, serial_port='/dev/ttyACM0', baud_rate=115200, stop_event=None):
+    def __init__(self, serial_port='COM3', baud_rate=9600, stop_event=None):
         super().__init__()
         self.serial_port = serial_port
         self.baud_rate = baud_rate
         self.stop_event = stop_event or threading.Event()
         self.daemon = True
         self.ser = None
-
-        # Add a flag to track connection status
         self.connected = False
-
-        # Add an event to signal when position data is received
         self.position_received = threading.Event()
 
     def run(self):
@@ -32,65 +29,95 @@ class RobotInterface(threading.Thread):
 
         while not self.stop_event.is_set() and retry_count < max_retries:
             try:
-                logger.info(f"Connecting to port {self.serial_port} at {self.baud_rate} baud")
+                logger.info(f"Connexion au port {self.serial_port} à {self.baud_rate} bauds")
                 self.ser = serial.Serial(self.serial_port, self.baud_rate, timeout=1)
-                time.sleep(2)  # Give the Arduino time to reset after opening serial
+                time.sleep(0.1)  # Temps d'attente pour l'ouverture du port série
 
-                # Clear any startup messages
-                self.ser.reset_input_buffer()
+                if self.ser.isOpen():
+                    logger.info(f"{self.serial_port} connecté!")
 
-                # Send a position request to start getting data
-                logger.info("Requesting initial position from Arduino")
-                self.ser.write(b"P\n")
+                    # Nettoyer les tampons
+                    self.ser.reset_input_buffer()
 
-                self.connected = True
-                retry_count = 0  # Reset retry count on successful connection
+                    # Demander la position initiale
+                    logger.info("Demande de position initiale à l'Arduino")
+                    self.ser.write(b"P\n")
 
-                logger.info("Starting to read from serial port...") # TODO: Adjust log level ?
-                while not self.stop_event.is_set():
-                    logger.debug("Checking for data...") # TODO: Remove or adjust log level
-                    if self.ser.in_waiting > 0:
-                        try:
-                            line = self.ser.readline().decode('utf-8').strip()
-                            if line:  # Ignore empty lines
-                                logger.debug(f"Received: {line}")
-                                self.process_line(line)
-                        except UnicodeDecodeError:
-                            logger.warning("Received invalid data, skipping")
-                    else:
-                        logger.debug("No data available")
+                    self.connected = True
+                    retry_count = 0  # Réinitialisation du compteur d'essais
 
-                    # Periodically request position updates
-                    time.sleep(0.1)
-
-                    # Send position request every few seconds if no data received
-                    if not self.position_received.is_set():
+                    logger.info("Début de lecture du port série...")
+                    while not self.stop_event.is_set():
+                        # Envoyer une demande de position
                         self.ser.write(b"P\n")
-                        self.position_received.wait(timeout=0.5)
-                        self.position_received.clear()
+
+                        # Attendre que des données soient disponibles
+                        timeout_counter = 0
+                        while self.ser.inWaiting() == 0 and timeout_counter < 50:
+                            time.sleep(0.01)
+                            timeout_counter += 1
+
+                        # Lire les données si disponibles
+                        if self.ser.inWaiting() > 0:
+                            try:
+                                line = self.ser.readline().decode('utf-8').strip()
+                                if line:
+                                    logger.debug(f"Reçu: {line}")
+                                    self.process_line(line)
+                                self.ser.flushInput()  # Vider le tampon après lecture
+                            except UnicodeDecodeError:
+                                logger.warning("Données invalides reçues, ignorées")
+                                self.ser.flushInput()
+
+                        time.sleep(0.1)
 
             except serial.SerialException as e:
-                logger.error(f"Serial error: {e}")
+                logger.error(f"Erreur série: {e}")
                 retry_count += 1
-                logger.info(f"Retrying connection ({retry_count}/{max_retries})...")
-                time.sleep(2)  # Wait before retry
+                logger.info(f"Nouvelle tentative ({retry_count}/{max_retries})...")
+                time.sleep(2)
 
             except Exception as e:
-                logger.error(f"Error in RobotInterface: {e}")
+                logger.error(f"Erreur dans RobotInterface: {e}")
                 break
 
             finally:
                 if self.ser and self.ser.is_open:
                     try:
                         self.ser.close()
-                        logger.info("Serial port closed")
+                        logger.info("Port série fermé")
                     except Exception as e:
-                        logger.error(f"Error closing serial port: {e}")
+                        logger.error(f"Erreur lors de la fermeture du port série: {e}")
 
                 self.connected = False
 
         if retry_count >= max_retries:
-            logger.error(f"Failed to connect after {max_retries} attempts")
+            logger.error(f"Échec de connexion après {max_retries} tentatives")
+
+    def process_line(self, line):
+        """Process a line received from the Arduino"""
+        if line.startswith("POS,"):
+            self.position_received.set()
+
+            # Utiliser des expressions régulières pour extraire les valeurs de position
+            x_match = re.search(r'X:([-+]?\d*\.?\d+)', line)
+            y_match = re.search(r'Y:([-+]?\d*\.?\d+)', line)
+            z_match = re.search(r'Z:([-+]?\d*\.?\d+)', line)
+
+            x = y = z = None
+
+            if x_match:
+                x = float(x_match.group(1))
+            if y_match:
+                y = float(y_match.group(1))
+            if z_match:
+                z = float(z_match.group(1))
+
+            if x is not None and y is not None and z is not None:
+                position_manager.set_position(x, y, z)
+                logger.info(f"Position mise à jour: X={x}, Y={y}, Z={z}")
+            else:
+                logger.warning(f"Données de position incomplètes dans: {line}")
 
     def process_line(self, line):
         """Process a line received from the Arduino"""
@@ -146,9 +173,24 @@ class RobotInterface(threading.Thread):
         """Send a movement command to the Arduino"""
         if self.connected:
             try:
-                logger.info(f"Sending command: {command}")
-                self.ser.write(f"{command}\n".encode('utf-8'))
+                if self.ser.is_open:
+                    print(f"Envoi de commande: {command}")
+                    logger.info(f"Envoi de commande: {command}")
+                    self.ser.write(f"{command}\n".encode())
+
+                    # Attendre la réponse
+                    timeout_counter = 0
+                    while self.ser.inWaiting() == 0 and timeout_counter < 50:
+                        time.sleep(0.01)
+                        timeout_counter += 1
+
+                    if self.ser.inWaiting() > 0:
+                        answer = self.ser.readline()
+                        logger.info(f"Réponse: {answer}")
+                        self.ser.flushInput()
+                else:
+                    logger.warning("Le port série n'est pas ouvert, impossible d'envoyer la commande")
             except serial.SerialException as e:
-                logger.error(f"Error sending command: {e}")
+                logger.error(f"Erreur lors de l'envoi de la commande: {e}")
         else:
-            logger.warning("Not connected to Arduino, cannot send command")
+            logger.warning("Non connecté à l'Arduino, impossible d'envoyer la commande")
