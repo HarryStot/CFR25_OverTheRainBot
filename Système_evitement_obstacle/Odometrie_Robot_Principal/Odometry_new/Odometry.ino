@@ -25,7 +25,7 @@ Odometry robot(L, r);
 float v = 7.0, w;
 float speedR = 0, speedL = 0;
 float angle_error = pi, thetaref;
-float x_goal = 0, y_goal = 1, theta_goal = 0;
+float x_goal = 0, y_goal = 0, theta_goal = 0;
 float K1 = 80;
 float eps = 0.05, eps_theta = 0.1;
 
