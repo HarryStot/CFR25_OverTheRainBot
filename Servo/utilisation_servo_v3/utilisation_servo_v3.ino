@@ -9,8 +9,8 @@ Adafruit_PWMServoDriver pwm = Adafruit_PWMServoDriver();
 #define SERVO_MAX  600  // Valeur PWM maximale (position 180°)
 
 // Caractères spéciaux pour le format de commande
-#define START_CHAR 'SRV'  // Caractère indiquant le début d'une série de commandes
-#define END_CHAR '\r\n'    // Caractère indiquant la fin d'une série de commandes
+#define START_CHAR '<'  // Caractère indiquant le début d'une série de commandes
+#define END_CHAR '>'    // Caractère indiquant la fin d'une série de commandes
 #define CMD_SEPARATOR ';'  // Séparateur entre les commandes individuelles
 
 // Paramètres pour le contrôle de la vitesse

@@ -4,6 +4,9 @@
 // Création d'un objet pour contrôler la carte PWM Adafruit
 Adafruit_PWMServoDriver pwm = Adafruit_PWMServoDriver(); 
 
+int MODE_servo = 0; // 0 pour le mode servo, 1 pour le mode capteur
+
+
 // Définition des limites PWM et paramètres globaux
 #define SERVO_MIN  150        // Valeur PWM minimale (position 0°)
 #define SERVO_MAX  600        // Valeur PWM maximale (position 180°)
@@ -47,39 +50,46 @@ void setup() {
 }
 
 void loop() {
-  // Lecture et traitement des commandes série
-  if (Serial.available()) {
-    char inChar = (char)Serial.read();
+  if(MODE_servo == 1) {
+    // Code pour le mode capteur (non inclus ici)
     
-    // Détection de la séquence de début "SRV"
-    if (!commandInProgress) {
-      if (inChar == START_CMD[startCharIndex]) {
-        startCharIndex++;
-        if (startCharIndex == strlen(START_CMD)) {
-          buffer = "";
-          commandInProgress = true;
-          startCharIndex = 0;
+  }
+  // Lecture et traitement des commandes série
+  if(MODE_servo == 0) {
+
+    if (Serial.available()) {
+      char inChar = (char)Serial.read();
+      
+      // Détection de la séquence de début "SRV"
+      if (!commandInProgress) {
+        if (inChar == START_CMD[startCharIndex]) {
+          startCharIndex++;
+          if (startCharIndex == strlen(START_CMD)) {
+            buffer = "";
+            commandInProgress = true;
+            startCharIndex = 0;
+          }
+        } else {
+          startCharIndex = 0; // Réinitialisation si séquence incorrecte
         }
-      } else {
-        startCharIndex = 0; // Réinitialisation si séquence incorrecte
+      }
+      // Détection de la séquence de fin "\r\n"
+      else if (inChar == '\r') {
+        // Attendre le '\n' dans la prochaine itération
+      }
+      else if (inChar == '\n' && commandInProgress) {
+        processCommand(buffer);  // Traitement de la commande complète
+        commandInProgress = false;
+      }
+      // Ajout du caractère au buffer si commande en cours
+      else if (commandInProgress) {
+        buffer += inChar;
       }
     }
-    // Détection de la séquence de fin "\r\n"
-    else if (inChar == '\r') {
-      // Attendre le '\n' dans la prochaine itération
-    }
-    else if (inChar == '\n' && commandInProgress) {
-      processCommand(buffer);  // Traitement de la commande complète
-      commandInProgress = false;
-    }
-    // Ajout du caractère au buffer si commande en cours
-    else if (commandInProgress) {
-      buffer += inChar;
-    }
+    
+    // Mise à jour des positions des servomoteurs
+    updateServos();
   }
-  
-  // Mise à jour des positions des servomoteurs
-  updateServos();
 }
 
 // Mise à jour progressive des positions selon vitesse définie
