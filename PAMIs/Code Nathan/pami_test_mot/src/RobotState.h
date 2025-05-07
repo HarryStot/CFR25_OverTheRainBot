@@ -6,7 +6,8 @@ enum class RobotState {
     NAVIGATING,
     AVOIDING,
     EXECUTING_TASK,
-    STOPPED
+    STOPPED,
+    DANCING
 };
 
 #endif // ROBOTSTATE_H

@@ -10,6 +10,7 @@
 #include "MotionController.h"
 #include "RobotState.h"
 #include "UltrasonicSensor.h"
+#include "MotorUP.h"
 
 class Robot {
 private:
@@ -18,8 +19,17 @@ private:
     Trajectory trajectory;
     MotionController motionController;
     RobotState state;
+    MotorUP* motorUP;
     double obstacleThreshold = 20.0; // Stop if closer than 20 cm
     unsigned long taskStartTime = 0; // For non-blocking task execution
+
+public:
+    void setState(RobotState newState) {
+        state = newState;
+        if (newState == RobotState::DANCING) {
+            taskStartTime = millis(); // Initialiser le temps de début pour DANCING
+        }
+    }
 
 public:
     Robot(double wheel_radius, double wheel_base)
@@ -46,6 +56,7 @@ public:
         Wheel* wheelL = static_cast<Wheel*>(getComponent("wheelL"));
         Wheel* wheelR = static_cast<Wheel*>(getComponent("wheelR"));
         UltrasonicSensor* sensor = static_cast<UltrasonicSensor*>(getComponent("ultrasonic"));
+        MotorUP* motorUP = static_cast<MotorUP*>(getComponent("motorUP"));
 
 
         if (!wheelL || !wheelR || !sensor) return;
@@ -156,6 +167,17 @@ public:
                 wheelL->update();
                 wheelR->update();
                 break;
+
+            case RobotState::DANCING:
+                if (millis() - taskStartTime >= 3000) { // Wait 3 sec
+                    Serial.println("Dancing!");
+                    if (motorUP) {
+                        motorUP->setSpeed(100); 
+                        motorUP->update();
+                    } 
+                state = RobotState::STOPPED;
+                break;
+            }
         }
     }
 

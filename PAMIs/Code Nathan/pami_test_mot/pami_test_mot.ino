@@ -17,6 +17,7 @@ Robot* robot = nullptr;
 Wheel* wheelL;
 Wheel* wheelR;
 UltrasonicSensor* ultrasonic;
+MotorUP* motorUP;
 
 void leftEncoderISR() {
     wheelL->updateEncoder(digitalRead(ENCODER_L_A), digitalRead(ENCODER_L_B));
@@ -41,10 +42,12 @@ void setup() {
     wheelL = new Wheel("wheelL", 4, 5, 10);
 	wheelR = new Wheel("wheelR", 6, 7, 9);
 	ultrasonic = new UltrasonicSensor("Ultrasonic sensor", ULTRASONIC_TRIG, ULTRASONIC_ECHO);
+    motorUP = new MotorUP("MotorUP", 8);
 	
 	robot->addComponent("wheelL", wheelL);
     robot->addComponent("wheelR", wheelR);
 	robot->addComponent("ultrasonic", ultrasonic);
+    robot->addComponent("motorUP", motorUP);
 	
     pinMode(ENCODER_L_A, INPUT);
     pinMode(ENCODER_L_B, INPUT);
@@ -54,19 +57,26 @@ void setup() {
     attachInterrupt(digitalPinToInterrupt(ENCODER_L_A), leftEncoderISR, RISING);
 	attachInterrupt(digitalPinToInterrupt(ENCODER_R_A), rightEncoderISR, RISING);
 	
-	
-	Serial.println("Test du capteur ultrasonique initialisé.");
-	
 	robot->addWaypoint(0.3, 0, 0);
 }
 
 void loop() {
-	robot->updateAll();
+    analogWrite(8, 100); 
+    delay(1000); // Wait for 1 second
+
+    analogWrite(8, 0); // Stop the motor    
+    delay(1000); // Wait for 1 second
+
+	//robot->updateAll();
 	
+
     if (Serial.available()) {
         char c = Serial.read();
         if (c == 's') {
             robot->stop();
+        } else if (c == 'd') { // Commande pour activer le mode DANCING
+            Serial.println("Activating DANCING mode...");
+            robot->setState(RobotState::DANCING); // Transition vers l'état DANCING
         }
     }
 	

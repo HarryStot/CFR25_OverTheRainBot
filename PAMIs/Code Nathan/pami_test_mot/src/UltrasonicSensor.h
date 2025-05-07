@@ -45,12 +45,13 @@ public:
 		} else {
 			distanceCm = (durationMicroSec / 2.0) * speedOfSoundInCmPerMicroSec;
 		}
-
+        /*
 		// Debug ici, correctement placé DANS une fonction
 		Serial.print(name);  // ← OK ici
 		Serial.print(" - Distance: ");
 		Serial.print(distanceCm);
 		Serial.println(" cm");
+        */
 		}
 	
 		
