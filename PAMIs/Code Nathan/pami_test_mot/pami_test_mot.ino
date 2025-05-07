@@ -4,6 +4,9 @@
 #define ENCODER_L_B 11
 #define ENCODER_R_A 3
 #define ENCODER_R_B 12
+#define ENCODER_R_A 3
+#define ULTRASONIC_TRIG A0
+#define ULTRASONIC_ECHO A1
 
 const double WHEEL_RADIUS = 0.04;
 const double WHEEL_BASE = 0.10;
@@ -14,6 +17,8 @@ Robot* robot = nullptr;
 
 Wheel* wheelL;
 Wheel* wheelR;
+UltrasonicSensor* ultrasonic;
+MotorUP* motorUP;
 
 void leftEncoderISR() {
     wheelL->updateEncoder(digitalRead(ENCODER_L_A), digitalRead(ENCODER_L_B));
@@ -36,10 +41,14 @@ void setup() {
 
     wheelL = new Wheel("wheelL", 4, 5, 10);
 	wheelR = new Wheel("wheelR", 6, 7, 9);
+	ultrasonic = new UltrasonicSensor("Ultrasonic sensor", ULTRASONIC_TRIG, ULTRASONIC_ECHO);
+    motorUP = new MotorUP("MotorUP", 8);
 	
 	robot->addComponent("wheelL", wheelL);
     robot->addComponent("wheelR", wheelR);
-
+	robot->addComponent("ultrasonic", ultrasonic);
+    robot->addComponent("motorUP", motorUP);
+	
     pinMode(ENCODER_L_A, INPUT);
     pinMode(ENCODER_L_B, INPUT);
     pinMode(ENCODER_R_A, INPUT);
@@ -59,15 +68,22 @@ void setup() {
 }
 
 void loop() {
-	// robot->updateAll();
+    analogWrite(8, 100); 
+    delay(1000); // Wait for 1 second
 
-    wheelL->update();
-    wheelR->update();
+    analogWrite(8, 0); // Stop the motor    
+    delay(1000); // Wait for 1 second
+
+	//robot->updateAll();
 	
+
     if (Serial.available()) {
         char c = Serial.read();
         if (c == 's') {
             robot->stop();
+        } else if (c == 'd') { // Commande pour activer le mode DANCING
+            Serial.println("Activating DANCING mode...");
+            robot->setState(RobotState::DANCING); // Transition vers l'état DANCING
         }
     }
 	
