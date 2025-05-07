@@ -40,7 +40,9 @@ NewPing sonar[NB_CAPTEUR] = {   // Sensor object array.
 // Définition des limites PWM et paramètres globaux
 #define SERVO_MIN  150        // Valeur PWM minimale (position 0°)
 #define SERVO_MAX  600        // Valeur PWM maximale (position 180°)
-#define START_CMD "SRV"       // Séquence indiquant le début d'une commande
+#define START_CMD_SERVO "SRV" // Séquence indiquant le début d'une commande servo
+#define START_CMD_LCD "LCD"   // Séquence indiquant le début d'une commande LCD
+#define START_CMD_MODE "MODE" // Séquence pour changer de mode
 #define END_CMD "\r\n"        // Séquence indiquant la fin d'une commande
 #define CMD_SEPARATOR ';'     // Séparateur entre commandes individuelles
 #define DEFAULT_SPEED 10      // Vitesse par défaut (degrés par intervalle)
@@ -53,9 +55,8 @@ struct ServoState {
 };
 
 ServoState servoStates[16];        // États des 16 servomoteurs possibles
-String buffer = "";                // Tampon pour les caractères reçus
-boolean commandInProgress = false; // Indique si réception en cours
-int startCharIndex = 0;            // Pour détecter la séquence de début
+String serialBuffer = "";          // Tampon pour les caractères reçus
+boolean commandComplete = false;   // Indique si une commande complète a été reçue
 
 // Fonction pour initialiser un servomoteur
 void initServo(int index) {
@@ -82,114 +83,68 @@ void setup() {
   }
 
   Serial.println("Prêt à recevoir des commandes !");
-  Serial.println("Format: SRV servo1:angle1:vitesse1;servo2:angle2:vitesse2\\r\\n");
-  Serial.println("La vitesse est optionnelle (par défaut: 10)");
+  Serial.println("Formats disponibles:");
+  Serial.println("- Servos: SRV servo1:angle1:vitesse1;servo2:angle2:vitesse2");
+  Serial.println("- LCD: LCD Message à afficher");
+  Serial.println("- Mode: MODE 0 (servo) ou MODE 1 (capteur)");
 }
 
 void loop() {
-  handleLCDMessage();
-  if(MODE_servo == 1) {
-    for (uint8_t i = 0; i < NB_CAPTEUR; i++) { // Loop through each sensor and display results.
-      delay(50); // Wait 50ms between pings (about 20 pings/sec). 29ms should be the shortest delay between pings.
-      mesure = sonar[i].ping_median(5)*vitesse_son;
+  // Gérer les entrées série
+  handleSerialInput();
   
-      if (mesure > 0 && mesure < 40) {
-      // Envoi du numéro de capteur et de la mesure sur le port série
-        Serial.print("us,"); // prefix
-        Serial.print(i);
-        Serial.print(",");
-        Serial.println(mesure);
-      }
-    }
-    
+  // Mode capteur ultrason
+  if(MODE_servo == 1) {
+    readUltrasonicSensors();
   }
+  
+  // Mode servo - mise à jour des positions
   if(MODE_servo == 0) {
-
-    if (Serial.available()) {
-      char inChar = (char)Serial.read();
-      
-      // Détection de la séquence de début "SRV"
-      if (!commandInProgress) {
-        if (inChar == START_CMD[startCharIndex]) {
-          startCharIndex++;
-          if (startCharIndex == strlen(START_CMD)) {
-            buffer = "";
-            commandInProgress = true;
-            startCharIndex = 0;
-          }
-        } else {
-          startCharIndex = 0; // Réinitialisation si séquence incorrecte
-        }
-      }
-      // Détection de la séquence de fin "\r\n"
-      else if (inChar == '\r') {
-        // Attendre le '\n' dans la prochaine itération
-      }
-      else if (inChar == '\n' && commandInProgress) {
-        processCommand(buffer);  // Traitement de la commande complète
-        commandInProgress = false;
-      }
-      // Ajout du caractère au buffer si commande en cours
-      else if (commandInProgress) {
-        buffer += inChar;
-      }
-    }
-
-    
-    // Mise à jour des positions des servomoteurs
     updateServos();
   }
-
 }
-void handleLCDMessage() {
-  if (Serial.available()) {
-    String message = Serial.readStringUntil('\n');
 
-    if (message.startsWith("LCD")) {
-      message = message.substring(3); // Enlève le préfixe
-
-      lcd.clear();
-      lcd.setCursor(0, 0);
-      lcd.print(message.substring(0, min(16, message.length())));
-
-      if (message.length() > 16) {
-        lcd.setCursor(0, 1);
-        lcd.print(message.substring(16, min(32, message.length())));
-      }
+// Fonction centralisée pour gérer les entrées série
+void handleSerialInput() {
+  while (Serial.available() > 0) {
+    char inChar = (char)Serial.read();
+    
+    // Si c'est un retour à la ligne, la commande est complète
+    if (inChar == '\n') {
+      commandComplete = true;
+    } else if (inChar != '\r') { // Ignorer les retours chariot
+      serialBuffer += inChar;
+    }
+    
+    // Si une commande complète est reçue, la traiter
+    if (commandComplete) {
+      processSerialCommand(serialBuffer);
+      serialBuffer = "";
+      commandComplete = false;
     }
   }
 }
 
-// Mise à jour progressive des positions selon vitesse définie
-void updateServos() {
-  unsigned long currentTime = millis();
-  
-  for (int i = 0; i < 16; i++) {
-    // Vérifier s'il est temps de mettre à jour ce servo
-    if (currentTime - servoStates[i].lastUpdate >= UPDATE_INTERVAL) {
-      // Si le servo n'a pas atteint sa position cible
-      if (servoStates[i].currentAngle != servoStates[i].targetAngle) {
-        // Calculer le déplacement en fonction de la vitesse
-        if (servoStates[i].currentAngle < servoStates[i].targetAngle) {
-          servoStates[i].currentAngle += min(servoStates[i].speed, 
-                                          servoStates[i].targetAngle - servoStates[i].currentAngle);
-        } else {
-          servoStates[i].currentAngle -= min(servoStates[i].speed, 
-                                          servoStates[i].currentAngle - servoStates[i].targetAngle);
-        }
-        
-        // Appliquer la nouvelle position
-        int pulse = map(servoStates[i].currentAngle, 0, 180, SERVO_MIN, SERVO_MAX);
-        pwm.setPWM(i, 0, pulse);
-      }
-      servoStates[i].lastUpdate = currentTime;
-    }
+// Fonction pour traiter les commandes série selon leur préfixe
+void processSerialCommand(String command) {
+  if (command.startsWith(START_CMD_SERVO)) {
+    // Commande pour les servomoteurs
+    processServoCommandString(command.substring(strlen(START_CMD_SERVO)));
+  } 
+  else if (command.startsWith(START_CMD_LCD)) {
+    // Commande pour l'écran LCD
+    processLCDCommand(command.substring(strlen(START_CMD_LCD)));
   }
+  else if (command.startsWith(START_CMD_MODE)) {
+    // Commande pour changer de mode
+    processModeCommand(command.substring(strlen(START_CMD_MODE)));
+  }
+  // Possibilité d'ajouter d'autres types de commandes ici
 }
 
-// Traitement d'une série de commandes séparées par des points-virgules
-void processCommand(String command) {
-  Serial.print("Commande reçue: ");
+// Traitement des commandes pour les servomoteurs
+void processServoCommandString(String command) {
+  Serial.print("Commande servo reçue: ");
   Serial.println(command);
   
   int startIndex = 0;
@@ -252,5 +207,83 @@ void processServoCommand(String servoCmd) {
   } else {
     Serial.print("Erreur : format invalide pour ");
     Serial.println(servoCmd);
+  }
+}
+
+// Traitement des commandes pour l'écran LCD
+void processLCDCommand(String message) {
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print(message.substring(0, min(16, message.length())));
+
+  if (message.length() > 16) {
+    lcd.setCursor(0, 1);
+    lcd.print(message.substring(16, min(32, message.length())));
+  }
+  
+  Serial.print("Message LCD affiché: ");
+  Serial.println(message);
+}
+
+// Traitement des commandes pour changer de mode
+void processModeCommand(String command) {
+  command.trim();
+  int mode = command.toInt();
+  
+  if (mode == 0 || mode == 1) {
+    MODE_servo = mode;
+    Serial.print("Mode changé: ");
+    Serial.println(MODE_servo == 0 ? "Servo" : "Capteur");
+    
+    // Affichage du mode sur l'écran LCD
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("Mode: ");
+    lcd.print(MODE_servo == 0 ? "Servo" : "Capteur");
+  } else {
+    Serial.println("Mode invalide. Utilisez 0 (servo) ou 1 (capteur)");
+  }
+}
+
+// Lecture des capteurs ultrasoniques
+void readUltrasonicSensors() {
+  for (uint8_t i = 0; i < NB_CAPTEUR; i++) {
+    delay(50); // Wait 50ms between pings (about 20 pings/sec). 29ms should be the shortest delay between pings.
+    mesure = sonar[i].ping_median(5)*vitesse_son;
+
+    if (mesure > 0 && mesure < 40) {
+      // Envoi du numéro de capteur et de la mesure sur le port série
+      Serial.print("us,"); // prefix
+      Serial.print(i);
+      Serial.print(",");
+      Serial.println(mesure);
+    }
+  }
+}
+
+// Mise à jour progressive des positions selon vitesse définie
+void updateServos() {
+  unsigned long currentTime = millis();
+  
+  for (int i = 0; i < 16; i++) {
+    // Vérifier s'il est temps de mettre à jour ce servo
+    if (currentTime - servoStates[i].lastUpdate >= UPDATE_INTERVAL) {
+      // Si le servo n'a pas atteint sa position cible
+      if (servoStates[i].currentAngle != servoStates[i].targetAngle) {
+        // Calculer le déplacement en fonction de la vitesse
+        if (servoStates[i].currentAngle < servoStates[i].targetAngle) {
+          servoStates[i].currentAngle += min(servoStates[i].speed, 
+                                          servoStates[i].targetAngle - servoStates[i].currentAngle);
+        } else {
+          servoStates[i].currentAngle -= min(servoStates[i].speed, 
+                                          servoStates[i].currentAngle - servoStates[i].targetAngle);
+        }
+        
+        // Appliquer la nouvelle position
+        int pulse = map(servoStates[i].currentAngle, 0, 180, SERVO_MIN, SERVO_MAX);
+        pwm.setPWM(i, 0, pulse);
+      }
+      servoStates[i].lastUpdate = currentTime;
+    }
   }
 }
