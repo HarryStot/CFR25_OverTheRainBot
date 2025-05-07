@@ -38,17 +38,17 @@ def main():
         logger.info("Interface robot démarrée")
 
         # Attendre que l'interface soit prête
-        time.sleep(5)
+        time.sleep(3)
         robot_interface.send_command("S")
 
         # Commande pour avancer d'un mètre (100cm)
         logger.info("Envoi de la commande pour avancer d'un mètre")
-        robot_interface.send_command("GX100Y0Z0")
+        robot_interface.send_command("GX0.00Y1.00Z1.57")
 
         # Attendre que le mouvement soit terminé
         # Le temps d'attente dépend de la vitesse du robot
         logger.info("Attente de la fin du mouvement...")
-        time.sleep(10)  # Ajuster selon la vitesse du robot
+        time.sleep(5)  # Ajuster selon la vitesse du robot
 
         # Arrêter le robot
         logger.info("Arrêt du robot")

@@ -158,7 +158,7 @@ class RobotBrain(threading.Thread):
 
     def handle_start_state(self):
         """Handle the START state"""
-        # Initialize the robot and move to IDLE state
+        # Initialize the robot and move to the IDLE state
         logger.info("Initializing robot...")
 
         logger.info("Ready...")
