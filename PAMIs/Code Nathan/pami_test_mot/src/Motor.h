@@ -50,10 +50,10 @@ public:
         if (enabled) {
 			int pwmValue = constrain(A * speed, 0, 255);
             analogWrite(pinPWM, pwmValue);  
-            
+            /*
 			Serial.print(" PWM ");
 			Serial.println(pwmValue);
-			
+			*/
         } else {
             analogWrite(pinPWM, 0); 
         }

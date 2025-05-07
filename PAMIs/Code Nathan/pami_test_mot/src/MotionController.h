@@ -26,12 +26,13 @@ public:
 
         leftSpeed = forwardSpeed - rotationSpeed;
 		rightSpeed = forwardSpeed + rotationSpeed;
-			
+		/*	
 		// Debug : affichage des vitesses
 		Serial.print("Left Speed: ");
 		Serial.print(leftSpeed);
 		Serial.print(" | Right Speed: ");
 		Serial.println(rightSpeed);
+		*/
     }
 };
 

@@ -4,6 +4,8 @@
 #define ENCODER_L_A 2
 #define ENCODER_R_B 12
 #define ENCODER_R_A 3
+#define ULTRASONIC_TRIG A0
+#define ULTRASONIC_ECHO A1
 
 const double WHEEL_RADIUS = 0.04;
 const double WHEEL_BASE = 0.10;
@@ -14,6 +16,7 @@ Robot* robot = nullptr;
 
 Wheel* wheelL;
 Wheel* wheelR;
+UltrasonicSensor* ultrasonic;
 
 void leftEncoderISR() {
     wheelL->updateEncoder(digitalRead(ENCODER_L_A), digitalRead(ENCODER_L_B));
@@ -37,10 +40,12 @@ void setup() {
 
     wheelL = new Wheel("wheelL", 4, 5, 10);
 	wheelR = new Wheel("wheelR", 6, 7, 9);
+	ultrasonic = new UltrasonicSensor("Ultrasonic sensor", ULTRASONIC_TRIG, ULTRASONIC_ECHO);
 	
 	robot->addComponent("wheelL", wheelL);
     robot->addComponent("wheelR", wheelR);
-
+	robot->addComponent("ultrasonic", ultrasonic);
+	
     pinMode(ENCODER_L_A, INPUT);
     pinMode(ENCODER_L_B, INPUT);
 	pinMode(ENCODER_R_A, INPUT);
@@ -48,6 +53,9 @@ void setup() {
 
     attachInterrupt(digitalPinToInterrupt(ENCODER_L_A), leftEncoderISR, RISING);
 	attachInterrupt(digitalPinToInterrupt(ENCODER_R_A), rightEncoderISR, RISING);
+	
+	
+	Serial.println("Test du capteur ultrasonique initialisé.");
 	
 	robot->addWaypoint(0.3, 0, 0);
 }
