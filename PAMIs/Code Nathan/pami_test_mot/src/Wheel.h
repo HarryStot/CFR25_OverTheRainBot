@@ -6,23 +6,31 @@
 
 class Wheel : public Component {
 private:
-    Motor motor;
+    Motor* motor;
     Encoder encoder;
 
 public:
-    Wheel(String name) : Component(name), motor(name + "_Motor"), encoder(name + "_Encoder") {}
+	// Better construct
+    Wheel(String name, int pinA, int pinB, int pinPWM) : Component(name), motor(new Motor(name + "_Motor", pinA, pinB, pinPWM, 0.5)), encoder(name + "_Encoder") {
+        motor->setSpeed(0);
+        motor->setDirection(false, false);
+    }
 
-    // TODO Change code
-    void setSpeed(int speed) { motor.setSpeed(speed); }
-    int getSpeed() const { return motor.getSpeed(); }
+    void setSpeed(int speed) { motor->setSpeed(speed); }
+    int getSpeed() const { return motor->getSpeed(); }
+	
+	void setDirection(bool enabled, bool direction) { motor->setDirection(enabled, direction); }
+	void getDirection(bool &enabled, bool &direction) const { motor->getDirection(enabled, direction); }
 
-    void updateEncoder(bool a, bool b) { encoder.update(a, b); }
+    void updateEncoder(bool a, bool b) { encoder.update_count(a, b); }
     int getEncoderValue() const { return encoder.getTicks(); }
 
     void resetEncoder() { encoder.reset(); }
 
+    Encoder getEncoder() const { return encoder; }
+
     void update() override {
-        motor.update();
+        motor->update();
         encoder.update();
     }
 };

@@ -11,8 +11,18 @@ public:
     Encoder(String name) : Component(name), count(0) {}
 
     void update_count (bool a, bool b) {
-        if (a == b) count++;  // Clockwise
-        else count--;         // Counterclockwise
+		static unsigned long lastInterruptTime = 0;
+		unsigned long interruptTime = millis();
+		
+		if (interruptTime - lastInterruptTime > 5) {
+			if (a == b) {
+				count++;  // Clockwise
+			} else {
+				count--;  // Counterclockwise
+			}
+			lastInterruptTime = interruptTime;
+		}
+		
     }
 
     int getTicks() const { return count; }

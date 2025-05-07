@@ -14,7 +14,7 @@ private:
     const double maxDistanceCm = 400;
 
 public:
-    UltrasonicSensor(String name, int trig, int echo) : Component(name), trigPin(trig), echoPin(echo), distance(0) {
+    UltrasonicSensor(String name, int trig, int echo) : Component(name), trigPin(trig), echoPin(echo), maxDistanceCm(0) {
         pinMode(trigPin, OUTPUT);
         pinMode(echoPin, INPUT);
     }

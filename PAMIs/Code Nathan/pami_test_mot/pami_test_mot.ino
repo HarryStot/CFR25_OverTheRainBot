@@ -1,50 +1,76 @@
-#include "src/Motor.h"
-#include "src/Encoder.h"
+#include "src/Robot.h"
 
 #define ENCODER_L_A 2
 #define ENCODER_L_B 11
 #define ENCODER_R_A 3
 #define ENCODER_R_B 12
 
-Motor motor_L("motor_L", 4, 5, 10);
-Motor motor_R("motor_R", 6, 7, 9);
+const double WHEEL_RADIUS = 0.04;
+const double WHEEL_BASE = 0.10;
 
-Encoder encoder_L("encoder_L");
-Encoder encoder_R("encoder_R");
+Robot* robot = nullptr;
 
-unsigned long last_time = 0;
+//Robot robot(WHEEL_RADIUS, WHEEL_BASE);
 
+Wheel* wheelL;
+Wheel* wheelR;
 
 void leftEncoderISR() {
-    encoder_L.update_count(digitalRead(ENCODER_L_A), digitalRead(ENCODER_L_B));
+    wheelL->updateEncoder(digitalRead(ENCODER_L_A), digitalRead(ENCODER_L_B));
+	// Serial.print("Left Encoder Count: ");
+    // Serial.println(wheelL->getEncoderValue());
 }
 
 void rightEncoderISR() {
-    encoder_R.update_count(digitalRead(ENCODER_R_A), digitalRead(ENCODER_R_B));
+    wheelR->updateEncoder(digitalRead(ENCODER_R_A), digitalRead(ENCODER_R_B));
+    // Serial.print("Right Encoder Count: ");
+    // Serial.println(wheelR->getEncoderValue());
 }
-void setup() {
-    Serial.begin(115200);
-    motor_L.setDirection(true, false);
-    motor_L.setSpeed(255);
 
-    motor_R.setDirection(true, false);
-    motor_R.setSpeed(255);
+void setup() {
+	Serial.begin(115200);
+
+	robot = new Robot(WHEEL_RADIUS, WHEEL_BASE);
+	
+	Serial.println("Robot initialized.");
+
+    wheelL = new Wheel("wheelL", 4, 5, 10);
+	wheelR = new Wheel("wheelR", 6, 7, 9);
+	
+	robot->addComponent("wheelL", wheelL);
+    robot->addComponent("wheelR", wheelR);
 
     pinMode(ENCODER_L_A, INPUT);
     pinMode(ENCODER_L_B, INPUT);
-
     pinMode(ENCODER_R_A, INPUT);
     pinMode(ENCODER_R_B, INPUT);
-    
+
     attachInterrupt(digitalPinToInterrupt(ENCODER_L_A), leftEncoderISR, RISING);
-    attachInterrupt(digitalPinToInterrupt(ENCODER_R_A), rightEncoderISR, RISING);
+	attachInterrupt(digitalPinToInterrupt(ENCODER_R_A), rightEncoderISR, RISING);
+	
+	// robot->addWaypoint(0.3, 0, 0);
+
+    // Test speed 100 for both wheels
+    wheelL->setSpeed(150*2);
+    wheelR->setSpeed(150*2);
+
+    wheelL->setDirection(true, true); // Forward
+    wheelR->setDirection(true, true); // Forward
 }
 
 void loop() {
-    motor_L.update();
-    motor_R.update();
-    last_time = millis();
-    
-    Serial.println(encoder_L.getTicks());
-    Serial.println(encoder_R.getTicks());
+	// robot->updateAll();
+
+    wheelL->update();
+    wheelR->update();
+	
+    if (Serial.available()) {
+        char c = Serial.read();
+        if (c == 's') {
+            robot->stop();
+        }
+    }
+	
+	// TODO: Add manual control
+    delay(10);
 }

@@ -6,16 +6,15 @@
 
 class Motor : public Component {
 private:
-    int speed; // Speed in m/s ?
+    int speed;
     bool direction;
     bool enabled;
     int pinA;
     int pinB;
     int pinPWM;
-	const float A;
 
 public:
-    Motor(String name, int pinA, int pinB, int pinPWM, float A) : Component(name), speed(0), direction(true), enabled(false), A(A) {
+    Motor(String name, int pinA, int pinB, int pinPWM) : Component(name), speed(0), direction(true), enabled(false) {
         pinMode(pinA, OUTPUT);
         pinMode(pinB, OUTPUT);
         pinMode(pinPWM, OUTPUT);
@@ -24,7 +23,7 @@ public:
         this->pinPWM = pinPWM;
     }
 
-    void setSpeed(int speed) { this->speed = speed;} 
+    void setSpeed(int speed) { this->speed = speed; }
 
     int getSpeed() const { return speed; }
 
@@ -32,9 +31,10 @@ public:
         this->direction = direction;
         this->enabled = enabled;
         if (enabled) {
-            digitalWrite(pinA, !direction); // for L298n clasic
-            digitalWrite(pinB, direction);
-            
+            // digitalWrite(pinA, direction); // for L298n clasic
+            // digitalWrite(pinB, !direction);
+            digitalWrite(pinA, enabled); // for L298n chelou
+            digitalWrite(pinB, !direction);
         } else {
             digitalWrite(pinA, LOW);
             digitalWrite(pinB, LOW);
@@ -47,18 +47,9 @@ public:
     }
 
     void update() override {
-        if (enabled) {
-			int pwmValue = constrain(A * speed, 0, 255);
-            analogWrite(pinPWM, pwmValue);  
-            
-			Serial.print(" PWM ");
-			Serial.println(pwmValue);
-			
-        } else {
-            analogWrite(pinPWM, 0); 
-        }
+        // TODO Implement motor control with PWM
+        analogWrite(pinPWM, speed);
     }
-	
 };
 
 #endif // MOTOR_H
