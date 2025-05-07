@@ -6,14 +6,19 @@ Odometry::Odometry(float L, float r) {
 }
 
 void Odometry::updateOdometry(float posR, float posL) {
-    float DR = r * (posR - posR_prec) * 3.14 / 180;
-    float DL = r * (posL - posL_prec) * 3.14 / 180;
-    float DC = (DR + DL) / 2;
+    DR = r * (posR - posR_prec) * 2 * pi / 400; //2 * pi * r * delta_tick / N
+    DL = r * (posL - posL_prec) * 2 * pi / 400;
+    DC = (DR + DL) / 2;
 
-    x += DC * cos(theta);
-    y += DC * sin(theta);
-    theta += (DR - DL) / (2 * L);
+    x = x_prec + DC * cos(theta);
+    y = y_prec + DC * sin(theta);
 
-    posR_prec = posR;
+    theta = theta_prec + (DR - DL) / (2 * L);
+    theta_prec = theta;
+
+    x_prec = x;
+    y_prec = y;
+
     posL_prec = posL;
+    posR_prec = posR;
 }
