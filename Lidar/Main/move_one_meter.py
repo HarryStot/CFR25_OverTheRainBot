@@ -5,8 +5,6 @@ import signal
 import threading
 import time
 
-from position_manager import position_manager
-from robot_brain import RobotBrain, Location, RobotState
 from robot_interface import RobotInterface
 
 logging.basicConfig(level=logging.INFO,
@@ -17,55 +15,50 @@ running = True
 
 def signal_handler(sig, frame):
     global running
-    logger.info("Signal d'arrêt reçu, arrêt en cours...")
+    logger.info("Received shutdown signal, stopping...")
     running = False
 
 
 def main():
-    # Enregistrement du gestionnaire de signal pour un arrêt propre
     signal.signal(signal.SIGINT, signal_handler)
 
     stop_event = threading.Event()
     robot_interface = None
 
     try:
-        # Initialisation de l'interface robot
-        logger.info("Démarrage de l'interface robot...")
+        # Robot interface initialization
+        logger.info("Starting robot interface...")
         robot_interface = RobotInterface(serial_port='/dev/ttyACM0',
                                          baud_rate=115200,
                                          stop_event=stop_event)
         robot_interface.start()
-        logger.info("Interface robot démarrée")
+        logger.info("Robot interface started")
 
-        # Attendre que l'interface soit prête
+        # Wait for the robot to be ready
         time.sleep(3)
         robot_interface.send_command("S")
 
-        # Commande pour avancer d'un mètre (100cm)
-        logger.info("Envoi de la commande pour avancer d'un mètre")
+        logger.info("Sending command to move 1 meter...")
         robot_interface.send_command("GX0.00Y1.00Z1.57")
 
-        # Attendre que le mouvement soit terminé
-        # Le temps d'attente dépend de la vitesse du robot
-        logger.info("Attente de la fin du mouvement...")
-        time.sleep(5)  # Ajuster selon la vitesse du robot
+        logger.info("Waiting for the end of the movement...")
+        time.sleep(5)  # TODO: remove
 
-        # Arrêter le robot
-        logger.info("Arrêt du robot")
+        # Stopping the robot
+        logger.info("Stopping the robot...")
         robot_interface.send_command("S")
 
     except Exception as e:
-        logger.error(f"Erreur dans main: {e}")
+        logger.error(f"Error in main: {e}")
     finally:
-        # Signal d'arrêt
-        logger.info("Arrêt de tous les threads...")
+        logger.info("Stopping all threads...")
         stop_event.set()
 
         if robot_interface and robot_interface.is_alive():
-            logger.info("Attente de l'arrêt de RobotInterface...")
+            logger.info("Waiting for robot interface to finish...")
             robot_interface.join(timeout=5)
 
-        logger.info("Terminé!")
+        logger.info("Bye!")
 
 
 if __name__ == '__main__':
