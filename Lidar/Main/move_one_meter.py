@@ -37,6 +37,7 @@ def main():
         # Wait for the robot to be ready
         time.sleep(3)
         robot_interface.send_command("S")
+        robot_interface.send_command("V150")
 
         logger.info("Sending command to move 1 meter...")
         robot_interface.send_command("GX0.00Y1.00Z1.57")

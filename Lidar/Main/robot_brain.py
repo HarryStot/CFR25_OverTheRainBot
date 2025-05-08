@@ -3,7 +3,6 @@
 import threading
 import time
 import logging
-import serial
 from enum import Enum
 from position_manager import position_manager
 import RPi.GPIO as GPIO
@@ -14,18 +13,59 @@ logger = logging.getLogger(__name__)
 
 
 class RobotState(Enum):
-    """States for the robot state machine"""
-    TEAM_SELECTION = 0     # Initial state to select team (blue/yellow)
+    """
+    Represents the different states a robot can be in during its operation.
+
+    This enumeration class defines the sequence of states that a robot transitions
+    through during its lifecycle, from team selection to completing tasks, handling
+    errors, and mission completion.
+
+    :cvar TEAM_SELECTION: Initial state to select team (blue/yellow).
+    :type TEAM_SELECTION: int
+    :cvar WAITING_FOR_START: State where the robot is waiting for the pull switch
+        to start the operation.
+    :type WAITING_FOR_START: int
+    :cvar NAVIGATING: State where the robot is moving to a target location.
+    :type NAVIGATING: int
+    :cvar EXECUTING_TASK: State where the robot is performing a task at the current
+        location.
+    :type EXECUTING_TASK: int
+    :cvar RETURNING_TO_END: State where the robot is heading to the end zone as
+        the time available is almost up.
+    :type RETURNING_TO_END: int
+    :cvar COMPLETED: State indicating that the robot has successfully completed its
+        mission.
+    :type COMPLETED: int
+    :cvar ERROR: State representing an error condition.
+    :type ERROR: int
+    """
+    TEAM_SELECTION = 0  # Initial state to select team (blue/yellow)
     WAITING_FOR_START = 1  # Waiting for pull switch
-    NAVIGATING = 2         # Moving to a target location
-    EXECUTING_TASK = 3     # Performing a task at the current location
-    RETURNING_TO_END = 4   # Going to the end zone when time is almost up
-    COMPLETED = 5          # Mission completed
-    ERROR = 6              # Error state
+    NAVIGATING = 2  # Moving to a target location
+    EXECUTING_TASK = 3  # Performing a task at the current location
+    RETURNING_TO_END = 4  # Going to the end zone when time is almost up
+    COMPLETED = 5  # Mission completed
+    ERROR = 6  # Error state
 
 
 class Task:
-    """Represents a task to be performed at a location"""
+    """
+    Represents a work-related task with a specific command and parameters.
+
+    This class is designed to encapsulate the details of a single task
+    in a system. Each task has a name, a command to execute, optional
+    parameters, and an expected completion time in seconds. The task
+    can also be easily represented as a string for display purposes.
+
+    :ivar name: The name of the task.
+    :type name: str
+    :ivar command: The command associated with the task.
+    :type command: str
+    :ivar params: Optional parameters for the task.
+    :type params: dict
+    :ivar completion_time: Expected time in seconds to complete the task.
+    :type completion_time: int
+    """
 
     def __init__(self, name, command, params=None, completion_time=5):
         self.name = name
@@ -38,7 +78,25 @@ class Task:
 
 
 class Location:
-    """Represents a location with optional tasks"""
+    """
+    Represents a location with coordinates, orientation, and associated tasks.
+
+    The Location class serves as a way to store and manage information about a
+    specific location, including its name, coordinates, optional orientation,
+    and a list of associated tasks. This class also provides a string
+    representation for easier identification of the location.
+
+    :ivar name: The name of the location.
+    :type name: str
+    :ivar x: The x-coordinate of the location.
+    :type x: float
+    :ivar y: The y-coordinate of the location.
+    :type y: float
+    :ivar orientation: Optional orientation of the location.
+    :type orientation: Optional[float]
+    :ivar tasks: List of tasks associated with the location.
+    :type tasks: list
+    """
 
     def __init__(self, name, x, y, orientation=None, tasks=None):
         self.name = name
@@ -52,30 +110,100 @@ class Location:
 
 
 class RobotBrain(threading.Thread):
-    """Main controller for the robot behavior"""
+    """
+    Handles the robot's decision-making, state management, navigation, and task
+    execution processes in a multi-threaded environment.
+
+    The `RobotBrain` class inherits from `threading.Thread` and serves as the core
+    controller for the robot's operations. It maintains the robot's state machine
+    and provides mechanisms for managing team selection, navigation to mission
+    locations, obstacle detection and handling, as well as executing specific tasks
+    at designated waypoints. Designed with thread safety using locks, it ensures
+    proper synchronization between its various components and external interfaces.
+
+    :ivar movement_interface: Interface responsible for managing robot movement.
+    :type movement_interface: Optional[RobotInterface]
+    :ivar action_interface: Interface for executing specific actions or tasks.
+    :type action_interface: Optional[RobotInterface]
+    :ivar stop_event: Synchronization event to handle termination of the thread.
+    :type stop_event: threading.Event
+    :ivar current_state: The robot's current state in the state machine.
+    :type current_state: RobotState
+    :ivar previous_state: The robot's previous state before transitioning.
+    :type previous_state: RobotState | None
+    :ivar state_changed: Event signaling changes in the robot's state.
+    :type state_changed: threading.Event
+    :ivar avoidance_enabled: Whether obstacle avoidance is active.
+    :type avoidance_enabled: bool
+    :ivar is_blue_team: Indicates if the robot is in the blue team (True) or yellow
+        team (False).
+    :type is_blue_team: bool | None
+    :ivar mission_start_time: Timestamp of when the mission started.
+    :type mission_start_time: float
+    :ivar mission_duration: Total allowed mission time in seconds.
+    :type mission_duration: int
+    :ivar end_zone_time: Time in seconds before mission end when the robot should
+        start returning.
+    :type end_zone_time: int
+    :ivar locations: List of predetermined mission locations.
+    :type locations: list[Location]
+    :ivar current_location_index: Index of the robot's current location in the
+        mission.
+    :type current_location_index: int
+    :ivar current_task_index: Index of the current task being executed at the
+        current location.
+    :type current_task_index: int
+    :ivar position_tolerance: Position tolerance in centimeters for reaching a
+        location.
+    :type position_tolerance: float
+    :ivar orientation_tolerance: Orientation tolerance in degrees for alignment.
+    :type orientation_tolerance: float
+    :ivar obstacle_detected: Whether the robot has detected any obstacles.
+    :type obstacle_detected: bool
+    :ivar navigation_timeout: Timeout in seconds for navigation tasks.
+    :type navigation_timeout: int
+    :ivar navigation_start_time: Timestamp when navigation to the current location
+        started.
+    :type navigation_start_time: float
+    :ivar task_start_time: Timestamp when the current task execution started.
+    :type task_start_time: float
+    :ivar task_timeout: Timeout in seconds for completing a task.
+    :type task_timeout: int
+    :ivar lock: Reentrant lock for thread-safe operations.
+    :type lock: threading.RLock
+    :ivar team_select_pin: GPIO pin number configured for team selection.
+    :type team_select_pin: int
+    :ivar validation_pin: GPIO pin number configured for the validation button.
+    :type validation_pin: int
+    :ivar pull_switch_pin: GPIO pin number configured for the mission start switch.
+    :type pull_switch_pin: int
+    :ivar potential_nav: Instance for handling potential field navigation.
+    :type potential_nav: PotentialFieldNavigation
+    :ivar obstacles: List of currently detected obstacles represented as tuples of
+        their coordinates.
+    :type obstacles: list[tuple[float, float]]
+    :ivar last_v: Last calculated linear velocity for debugging.
+    :type last_v: float
+    :ivar last_omega: Last calculated angular velocity for debugging.
+    :type last_omega: float
+    """
 
     def __init__(self,
-                 movement_port='/dev/pts/3',
-                 action_port='/dev/pts/4',
-                 baud_rate=115200,
+                 movement_interface=None,
+                 action_interface=None,
                  stop_event=None):
         super().__init__()
-        self.movement_port = movement_port
-        self.action_port = action_port
-        self.baud_rate = baud_rate
+        self.movement_interface = movement_interface  # RobotInterface instance for movement
+        self.action_interface = action_interface  # RobotInterface instance for actions
         self.stop_event = stop_event or threading.Event()
         self.daemon = True
 
-        # Initialize serial ports
-        self.movement_ser = None
-        self.action_ser = None
-
         # State machine variables
-        self.current_state = RobotState.NAVIGATING
+        self.current_state = RobotState.TEAM_SELECTION
         self.previous_state = None
         self.state_changed = threading.Event()
         self.avoidance_enabled = False
-        
+
         # Team and timing variables
         self.is_blue_team = None  # True for blue team, False for yellow team
         self.mission_start_time = 0  # When the pull switch was activated
@@ -88,22 +216,26 @@ class RobotBrain(threading.Thread):
         self.current_task_index = -1
 
         # Navigation parameters
-        self.position_tolerance = 2.0  # How close the robot needs to be to consider it at the target
-        self.orientation_tolerance = 1.0  # Degrees
+        self.position_tolerance = 2.0  # [cm]
+        self.orientation_tolerance = 1.0  # [degrees]
         self.obstacle_detected = False
-        self.navigation_timeout = 60  # seconds
+        self.navigation_timeout = 60  # [seconds]
         self.navigation_start_time = 0
 
         # Task execution variables
         self.task_start_time = 0
-        self.task_timeout = 20  # seconds
+        self.task_timeout = 20  # [seconds]
 
         # Lock for thread safety
-        self.lock = threading.RLock()        # GPIO configuration
+        self.lock = threading.RLock()
+
+        # GPIO configuration
         GPIO.setmode(GPIO.BCM)
         self.team_select_pin = 17  # GPIO pin for team selection switch
-        self.pull_switch_pin = 18   # GPIO pin for pull switch to start
+        self.validation_pin = 27  # GPIO pin for validation button
+        self.pull_switch_pin = 18  # GPIO pin for pull switch to start
         GPIO.setup(self.team_select_pin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+        GPIO.setup(self.validation_pin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
         GPIO.setup(self.pull_switch_pin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
 
         # Initialize potential field navigation
@@ -117,10 +249,17 @@ class RobotBrain(threading.Thread):
         self.last_omega = 0.0
 
     def update_obstacles(self, obstacle_list):
-        """Update the list of obstacles
+        """
+        Updates the internal list of obstacles used for potential field navigation. Converts the
+        obstacle information from rectangle format to a simplified point representation using only
+        the center point of each obstacle. Logs the update and detailed obstacle information if the
+        number of obstacles is fewer than five.
 
-        Arguments:
-            obstacle_list: List of obstacles in format [(center_x, center_y, width, height), ...]
+        :param obstacle_list: A list of obstacles, where each obstacle is represented as a tuple of
+            four float values (x, y, width, height). The x and y coordinates represent the center
+            of the obstacle, while width and height define its dimensions.
+        :type obstacle_list: list[tuple[float, float, float, float]]
+        :return: None
         """
         with self.lock:
             # Convert from rectangle format to point format for potential field navigation
@@ -134,13 +273,33 @@ class RobotBrain(threading.Thread):
                         logger.debug(f"Obstacle at ({obs[0]:.1f}, {obs[1]:.1f}), size: {obs[2]:.1f}x{obs[3]:.1f}")
 
     def add_location(self, location):
-        """Add a location to the mission"""
+        """
+        Adds a new location to the list of locations in a thread-safe manner.
+
+        Utilizes a lock to ensure that multiple threads can safely update the shared
+        locations list without generating concurrency issues. Logs the addition
+        of the new location for operational awareness.
+
+        :param location: New location to be added to the list.
+        :type location: Any
+        :return: None
+        """
         with self.lock:
             self.locations.append(location)
             logger.info(f"Added location: {location}")
 
     def clear_locations(self):
-        """Clear all locations"""
+        """
+        Clears all stored locations and resets related indices.
+
+        This method safely clears the list of locations by acquiring a lock to
+        ensure thread-safety. It also resets the indices for the current location
+        and task to initial default values. An informational log message is
+        generated upon successful completion of this operation.
+
+        :raises None: This method does not raise any exceptions.
+        :return: None
+        """
         with self.lock:
             self.locations = []
             self.current_location_index = -1
@@ -148,7 +307,15 @@ class RobotBrain(threading.Thread):
             logger.info("Cleared all locations")
 
     def set_state(self, new_state):
-        """Change the robot state"""
+        """
+        Sets a new state for the object in a thread-safe manner. If the new state
+        differs from the current state, it updates the previous state with the
+        current state's value, assigns the new value to the current state, and
+        triggers the `state_changed` event. Logs information about the state change.
+
+        :param new_state: The new state value to set.
+        :return: None
+        """
         with self.lock:
             if new_state != self.current_state:
                 self.previous_state = self.current_state
@@ -156,60 +323,138 @@ class RobotBrain(threading.Thread):
                 self.state_changed.set()
                 logger.info(f"State changed: {self.previous_state} -> {self.current_state}")
 
-    def handle_start_state(self):
-        """Handle the START state"""
-        # Initialize the robot and move to the IDLE state
-        logger.info("Initializing robot...")
-
-        logger.info("Ready...")
-        while GPIO.input(self.gpio_pin) == GPIO.HIGH:
-            time.sleep(0.1)
-
-        logger.info("Steady...")
-        while GPIO.input(self.gpio_pin) == GPIO.LOW:
-            time.sleep(0.1)
-
-        logger.info("Go!")
-        self.set_state(RobotState.IDLE)
-
     def handle_team_selection_state(self):
-        """Handle the TEAM_SELECTION state - determine team based on switch position"""
+        """
+        Handles the team selection state by monitoring the team selection and
+        validation buttons. This function determines and sets the team (either
+        blue or yellow), updates the relevant display information, and transitions
+        to the next state when the team selection is confirmed.
+
+        In the team selection state, this function checks the state of the team
+        selection GPIO pin to determine whether the blue team or the yellow team
+        is selected. It updates the LCD accordingly to show the selected team
+        and then waits for the validation button to confirm the selection. Once
+        the button is pressed, it updates the position manager with the selected
+        team, shows a confirmation message on the LCD, and transitions the robot
+        to the next state where it awaits the start signal.
+
+        :raises RuntimeError: If there is an issue with the position manager module.
+
+        """
         # Check team selection switch
         if GPIO.input(self.team_select_pin) == GPIO.HIGH:
             self.is_blue_team = True
+            team_name = "BLUE TEAM"
             logger.info("Blue team selected")
         else:
             self.is_blue_team = False
+            team_name = "YELLOW TEAM"
             logger.info("Yellow team selected")
 
-        # Load mission locations based on team
-        self.load_team_missions()
-        
-        # Move to waiting for start
-        self.set_state(RobotState.WAITING_FOR_START)
+        # Update LCD with team selection
+        self.send_lcd_message("SELECT TEAM:", team_name)
 
-    def handle_waiting_for_start_state(self):
-        """Handle the WAITING_FOR_START state - wait for pull switch activation"""
-        # Check if pull switch has been activated
-        if GPIO.input(self.pull_switch_pin) == GPIO.LOW:
-            logger.info("Pull switch activated! Starting mission...")
-            self.mission_start_time = time.time()
-            
-            # Start the mission with the first location
-            self.current_location_index = 0
-            self.current_task_index = -1
-            
-            # Move to navigating state to go to first location
-            self.set_state(RobotState.NAVIGATING)
-            self.navigation_start_time = time.time()
+        # Check if validation button is pressed to confirm team selection
+        if GPIO.input(self.validation_pin) == GPIO.HIGH:
+            logger.info("Validation button pressed, confirming team selection")
+
+            # Update position manager with team selection
+            from position_manager import position_manager, Team
+            team = Team.BLUE if self.is_blue_team else Team.YELLOW
+            position_manager.set_team(team)
+
+            # Update LCD to show team is confirmed
+            self.send_lcd_message(f"{team_name}", "CONFIRMED!")
+            time.sleep(1)  # Show confirmation briefly
+
+            # Load mission locations based on team
+            self.load_team_missions()
+
+            # Move to waiting for start
+            logger.info("Moving to WAITING_FOR_START state")
+            self.set_state(RobotState.WAITING_FOR_START)
         else:
-            # Still waiting for pull switch activation
+            # Still in team selection, allow team to be changed
             time.sleep(0.1)
 
+    def handle_waiting_for_start_state(self):
+        """
+        Handles the "waiting for start" state of the robot, including interactions
+        with a physical pull switch and updates to the robot's display. This method
+        initializes the robot's mission behavior, starting from the ready state
+        through to mission activation.
+
+        Key transitions handled within this method:
+        - Waits for the pull switch to be pressed to move to the "steady" state.
+        - Waits for the pull switch to be released to activate the "go" state.
+        - Initializes required state values for starting the mission.
+
+        :param self: The instance of the robot's control class managing its states and behavior.
+        :raises: This method does not raise any specific exceptions.
+
+        :rtype: None
+        :return: This method does not return any value.
+        """
+        logger.info("Initializing robot...")
+
+        # Display "Ready" message and wait for switch to be pressed
+        logger.info("Ready...")
+        self.send_lcd_message(f"Team {'Blue' if self.is_blue_team else 'Yellow'}", "Ready...")
+
+        # Wait for pull switch to be pressed (LOW)
+        while GPIO.input(self.pull_switch_pin) == GPIO.HIGH:
+            time.sleep(0.1)
+            # Check if we should exit (e.g. if stop_event is set)
+            if self.stop_event.is_set():
+                return
+
+        # Display "Steady" message and wait for switch to be released (HIGH)
+        logger.info("Steady...")
+        self.send_lcd_message(f"Team {'Blue' if self.is_blue_team else 'Yellow'}", "Steady...")
+
+        # Wait for pull switch to be released (HIGH)
+        while GPIO.input(self.pull_switch_pin) == GPIO.LOW:
+            time.sleep(0.1)
+            # Check if we should exit
+            if self.stop_event.is_set():
+                return
+
+        # Display "Go" message and start the mission
+        logger.info("GO!!!")
+        self.send_lcd_message(f"Team {'Blue' if self.is_blue_team else 'Yellow'}", "GO!!!")
+
+        # Record mission start time
+        self.mission_start_time = time.time()
+
+        # Start the mission with the first location
+        self.current_location_index = 0
+        self.current_task_index = -1
+
+        # Move to navigating state to go to first location
+        self.set_state(RobotState.NAVIGATING)
+        self.navigation_start_time = time.time()
+
     def load_team_missions(self):
-        """Load mission locations based on selected team"""
+        """
+        Loads mission waypoints specific to the team and populates them based on
+        predefined locations and tasks. This method clears any pre-existing locations
+        before adding new ones depending on the team's color (blue or yellow).
+        The mission waypoints include starting positions, action points with associated
+        tasks like grabbing or dropping items, and end zones. Tasks are initialized
+        with specific parameters, and debug logging is used to indicate the number
+        of locations loaded for the current team.
+
+        .. note::
+           This implementation currently hardcodes mission details for blue and yellow
+           teams. Future improvements may include loading mission data from a file or
+           a database.
+
+        :raises None: The method does not raise exceptions.
+        """
         self.clear_locations()
-        
+
+        # TODO: Change this to load from a file or database or just hardcode for now
+        # FIXME: Change values
         if self.is_blue_team:
             # Blue team mission waypoints
             self.add_location(Location("BlueStart", 30, 30, 0))
@@ -232,11 +477,22 @@ class RobotBrain(threading.Thread):
             ]))
             # Add more yellow team locations as needed
             self.add_location(Location("YellowEndZone", 120, 30, 270))
-            
+
         logger.info(f"Loaded {len(self.locations)} locations for {'blue' if self.is_blue_team else 'yellow'} team")
 
     def handle_idle_state(self):
-        """Handle the IDLE state"""
+        """
+        Handles the robot's behavior in the idle state. In the idle state, the robot
+        either progresses to the next location or remains idle based on whether there
+        are more locations to visit.
+
+        If there are more locations left in the sequence, the robot transitions to
+        the navigating state, updating its current location index and resetting the
+        current task index. If there are no further locations, the robot will
+        wait and periodically check for new destinations.
+
+        :return: None
+        """
         if self.locations and self.current_location_index < len(self.locations) - 1:
             # Move to the next location
             self.current_location_index += 1
@@ -246,21 +502,35 @@ class RobotBrain(threading.Thread):
             self.navigation_start_time = time.time()
         else:
             # No more locations, wait for new ones
-            time.sleep(0.5)    
-    
+            time.sleep(0.5)
+
     def handle_navigating_state(self):
-        """Handle the NAVIGATING state with potential field navigation"""
+        """
+        Handles navigation logic for the robot while it is in the navigating state.
+
+        This method determines the appropriate navigation actions based on the robot's
+        current location, mission time constraints, and obstacle detection status. It
+        also calculates the distance to the target, evaluates the required orientation
+        corrections, and sends movement commands accordingly. The method makes use of
+        potential field navigation for obstacle avoidance if enabled, and supports
+        direct navigation otherwise. Additionally, state transitions occur based on
+        defined criteria such as reaching a target, running out of time, or encountering
+        obstacles.
+
+        :raises ValueError: If any unexpected state or condition is encountered
+                            during navigation.
+        """
         current_location = self.locations[self.current_location_index]
 
         # Check if we need to return to end zone based on time
         elapsed_time = time.time() - self.mission_start_time
         remaining_time = self.mission_duration - elapsed_time
-        
+
         if remaining_time <= self.end_zone_time:
             logger.warning(f"Only {remaining_time:.1f} seconds remaining! Heading to end zone.")
             self.set_state(RobotState.RETURNING_TO_END)
             return
-            
+
         # Check if navigation timed out
         # if time.time() - self.navigation_start_time > self.navigation_timeout:
         #     logger.warning(f"Navigation to {current_location.name} timed out")
@@ -297,7 +567,7 @@ class RobotBrain(threading.Thread):
                     return
 
             logger.info(f"Reached location: {current_location.name}")
-            self.send_movement_command("S") # Stop the robot
+            self.send_movement_command("S")  # Stop the robot
             # If there are tasks to perform, move to EXECUTING_TASK state
             if current_location.tasks:
                 self.current_task_index = 0
@@ -305,7 +575,7 @@ class RobotBrain(threading.Thread):
                 self.task_start_time = time.time()
             else:
                 # No tasks, go back to IDLE
-                self.set_state(RobotState.IDLE)
+                self.set_state(RobotState.IDLE)  # FIXME: Change to NAVIGATING?
         elif self.avoidance_enabled:
 
             # Navigation using potential field
@@ -356,20 +626,20 @@ class RobotBrain(threading.Thread):
         elif not self.avoidance_enabled:
             # Simple direct navigation without potential field
             self.send_movement_command(f"GX{current_location.x:.2f}Y{current_location.y:.2f}Z{current_z:.2f}")
-            logger.info(f"Directly navigating to {current_location.name}, distance: {distance:.2f}")    
-            
+            logger.info(f"Directly navigating to {current_location.name}, distance: {distance:.2f}")
+
     def handle_executing_task_state(self):
         """Handle the EXECUTING_TASK state"""
         # Check if we need to return to end zone based on time
         elapsed_time = time.time() - self.mission_start_time
         remaining_time = self.mission_duration - elapsed_time
-        
+
         if remaining_time <= self.end_zone_time:
             logger.warning(f"Only {remaining_time:.1f} seconds remaining! Abandoning task and heading to end zone.")
             self.send_movement_command("S")  # Stop the robot
             self.set_state(RobotState.RETURNING_TO_END)
             return
-        
+
         current_location = self.locations[self.current_location_index]
         current_task = current_location.tasks[self.current_task_index]
 
@@ -395,36 +665,36 @@ class RobotBrain(threading.Thread):
             else:
                 # All tasks complete, go back to IDLE
                 logger.info(f"All tasks completed at location: {current_location.name}")
-                self.set_state(RobotState.IDLE)
+                self.set_state(RobotState.IDLE)  # FIXME: Change to NAVIGATING?
         else:
             # Task still in progress
-            time.sleep(0.1)    
+            time.sleep(0.1)
 
     def handle_returning_to_end_state(self):
         """Handle the RETURNING_TO_END state - go to end zone before time runs out"""
         # Get the end zone location (last location in the list)
         end_location = self.locations[-1]
-        
+
         # Get current position
         current_x, current_y, current_z = position_manager.get_position()
         distance = ((current_x - end_location.x) ** 2 +
-                   (current_y - end_location.y) ** 2) ** 0.5
-        
+                    (current_y - end_location.y) ** 2) ** 0.5
+
         # Check if we've reached the end zone
         if distance <= self.position_tolerance:
             logger.info("Reached end zone! Mission completed.")
             self.send_movement_command("S")  # Stop the robot
             self.set_state(RobotState.COMPLETED)
             return
-            
+
         # Continue navigating to end zone
         self.send_movement_command(f"GX{end_location.x:.2f}Y{end_location.y:.2f}Z{end_location.orientation:.2f}")
         logger.info(f"Returning to end zone, distance: {distance:.2f}")
-        
+
         # Check if we're about to run out of time
         elapsed_time = time.time() - self.mission_start_time
         remaining_time = self.mission_duration - elapsed_time
-        
+
         if remaining_time < 2:
             # Almost out of time, emergency stop
             logger.warning("Mission time almost up! Performing emergency stop.")
@@ -455,60 +725,135 @@ class RobotBrain(threading.Thread):
         self.set_state(RobotState.NAVIGATING)
 
     def send_movement_command(self, command):
-        """Send a command to the movement serial port"""
-        if self.movement_ser and self.movement_ser.is_open:
+        """
+        Sends a movement command through the movement interface if it is connected.
+
+        This method handles the task of sending movement commands to the robot's
+        movement interface. If the movement interface is not connected, it logs an
+        error and sets the robot state to an error state. Any exceptions raised during
+        the command transmission are logged, and the robot state is updated to error.
+
+        Examples for command strings:
+            - "GX10.0Y20.0Z90.0" (go to coordinates command)
+            - "S" (stop command)
+            - "P" (get position command)
+            - "INITX10.0Y20.0Z90.0" (initialize position command)
+            - "V50" (set velocity command)
+
+        :param command: Movement command to be sent to the movement interface.
+        :type command: str
+        :return: None
+        """
+        if self.movement_interface and self.movement_interface.connected:
             try:
-                full_command = f"{command}\r\n"
-                self.movement_ser.write(full_command.encode())
+                self.movement_interface.send_command(command)
                 logger.info(f"Sent movement command: {command}")
             except Exception as e:
                 logger.error(f"Error sending movement command: {e}")
                 self.set_state(RobotState.ERROR)
+        else:
+            logger.error("Movement interface not connected, cannot send command")
+            self.set_state(RobotState.ERROR)
 
     def send_action_command(self, command, params=None):
-        """Send a command to the action serial port"""
-        if self.action_ser and self.action_ser.is_open:
+        """
+        Sends an action command to the robot through the connected action interface. Constructs
+        the full command string by concatenating the command with the formatted parameters.
+        Logs the command being sent or any encountered errors. If the action interface is not
+        connected, sets the robot state as an error.
+
+        Examples for command and params:
+            - command: "LCD"
+              params: {"L1": "Hello", "L2": "World"}
+              full_command: "LCDL1Hello;L2World"
+            - command: "SRV"
+              params: {"id": "angle:speed"}
+              full_command: "SRVid:angle:speed"
+            - command: "STEP
+              params: {"step": "1"} FIXME: Change to actual command
+              full_command: "STEPstep1"
+            - command: "US" (ultrasonic sensor)
+              params: {"ultrasonic_sensor": "1"} FIXME: Change to actual command
+              full_command: "USultrasonic_sensor1"
+
+        :param command: The base command string to send to the robot.
+        :type command: str
+        :param params: Additional parameters for the command as key-value pairs. Defaults to None.
+        :type params: dict, optional
+        :return: None
+        """
+        if self.action_interface and self.action_interface.connected:
             try:
                 # Build the command string based on the command and params
                 params_str = ""
                 if params:
                     params_str = ";".join([f"{k}{v}" for k, v in params.items()])
 
-                full_command = f"{command}{params_str}\r\n"
-                self.action_ser.write(full_command.encode())
+                full_command = f"{command}{params_str}"
+                self.action_interface.send_command(full_command)
                 logger.info(f"Sent action command: {command}{params_str}")
             except Exception as e:
                 logger.error(f"Error sending action command: {e}")
                 self.set_state(RobotState.ERROR)
+        else:
+            logger.error("Action interface not connected, cannot send command")
+            self.set_state(RobotState.ERROR)
 
     def set_obstacle_detected(self, detected):
-        """Set the obstacle detection flag"""
+        """
+        Updates the obstacle detection status with thread safety. It ensures that the
+        obstacle detection state is only updated if the new value differs from the
+        previous state. The method also logs the updated state whenever a change
+        occurs.
+
+        :param detected: New obstacle detection status.
+        :type detected: bool
+        :return: None
+        """
         with self.lock:
             if detected != self.obstacle_detected:
                 self.obstacle_detected = detected
                 logger.info(f"Obstacle detection changed: {detected}")
 
+    def send_lcd_message(self, line1="", line2=""):
+        """
+        Sends a two-line message to the LCD display. The provided text for each
+        line will immediately be sent to the LCD using the appropriate action
+        command. Debug logging is performed for the message sent.
+
+        :param line1: The text for the first line of the LCD display.
+            Defaults to an empty string if not provided.
+            Type: str
+        :param line2: The text for the second line of the LCD display.
+            Defaults to an empty string if not provided.
+            Type: str
+        :return: None
+        """
+        params = {
+            "L1": line1,
+            "L2": line2
+        }
+        # Use the action command method to send LCD commands
+        self.send_action_command("LCD", params)
+        logger.debug(f"Sent to LCD - Line 1: '{line1}', Line 2: '{line2}'")
+
     def run(self):
         """Main brain thread function"""
         try:
-            # Connect to serial ports
-            logger.info(f"Connecting to movement port {self.movement_port} at {self.baud_rate} baud")
-            self.movement_ser = serial.Serial(self.movement_port, self.baud_rate, timeout=1)
+            # Check if interfaces are connected
+            if not (self.movement_interface and self.movement_interface.connected):
+                logger.error("Movement interface not connected, cannot run brain")
+                return
 
-            if self.action_port:
-                logger.info(f"Connecting to action port {self.action_port} at {self.baud_rate} baud")
-                self.action_ser = serial.Serial(self.action_port, self.baud_rate, timeout=1)
-            else:
-                logger.info("No action port specified, skipping")
-
-            time.sleep(2)  # Wait for connections to stabilize
+            if not (self.action_interface and self.action_interface.connected):
+                logger.warning("Action interface not connected, some functions will be limited")
 
             while not self.stop_event.is_set():
                 # State machine
-                if self.current_state == RobotState.START:
-                    self.handle_start_state()
-                elif self.current_state == RobotState.IDLE:
-                    self.handle_idle_state()
+                if self.current_state == RobotState.TEAM_SELECTION:
+                    self.handle_team_selection_state()
+                elif self.current_state == RobotState.WAITING_FOR_START:
+                    self.handle_waiting_for_start_state()
                 elif self.current_state == RobotState.NAVIGATING:
                     self.handle_navigating_state()
                 elif self.current_state == RobotState.EXECUTING_TASK:
@@ -526,13 +871,5 @@ class RobotBrain(threading.Thread):
             logger.error(f"Error in RobotBrain: {e}")
 
         finally:
-            # Clean up resources
-            if self.movement_ser and self.movement_ser.is_open:
-                self.movement_ser.close()
-                logger.info("Movement serial port closed")
-
-            if self.action_ser and self.action_ser.is_open:
-                self.action_ser.close()
-                logger.info("Action serial port closed")
-
+            # Just clean up GPIO, interfaces are handled in main.py
             GPIO.cleanup()

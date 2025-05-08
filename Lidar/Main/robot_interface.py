@@ -11,7 +11,31 @@ logger = logging.getLogger(__name__)
 
 
 class RobotInterface(threading.Thread):
-    """Update robot position and target from serial data"""
+    """
+    Manages communication with an Arduino-based robot through a serial interface.
+
+    This class handles establishing a serial connection with the robot, sending
+    commands, receiving data, and interpreting messages from the robot. It extends
+    `threading.Thread` to operate on a separate thread, continuously monitoring the
+    connection and processing data from the robot.
+
+    :ivar serial_port: Path to the serial port used to communicate with the robot.
+    :type serial_port: str
+    :ivar baud_rate: Baud rate used for serial communication.
+    :type baud_rate: int
+    :ivar stop_event: Event object used to signal the thread to stop execution.
+    :type stop_event: threading.Event
+    :ivar daemon: Indicates whether the thread should run as a daemon thread.
+    :type daemon: bool
+    :ivar ser: Object to represent the serial connection with the robot.
+    :type ser: serial.Serial or None
+    :ivar connected: Connection state with the robot, True if connected.
+    :type connected: bool
+    :ivar position_received: Event object triggered when a position update is received.
+    :type position_received: threading.Event
+    :ivar buffer: Temporary storage for data received from the robot for line-based processing.
+    :type buffer: str
+    """
 
     def __init__(self, serial_port='/dev/ttyACM0', baud_rate=115200, stop_event=None):
         super().__init__()
