@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
 
+import logging
 import threading
 import time
-import logging
 from enum import Enum
-from position_manager import position_manager
+
 import RPi.GPIO as GPIO
 import numpy as np
+
 from avoidance_system import PotentialFieldNavigation
+from position_manager import position_manager
 
 logger = logging.getLogger(__name__)
 
@@ -247,6 +249,15 @@ class RobotBrain(threading.Thread):
         # Last calculated control command (for debugging)
         self.last_v = 0.0
         self.last_omega = 0.0
+
+    def __del__(self):
+        """
+        Destructor for the RobotBrain class. Cleans up GPIO settings and stops
+        the thread if it is still running.
+
+        :return: None
+        """
+        GPIO.cleanup()
 
     def update_obstacles(self, obstacle_list):
         """
@@ -865,7 +876,7 @@ class RobotBrain(threading.Thread):
                 elif self.current_state == RobotState.ERROR:
                     self.handle_error_state()
 
-                time.sleep(0.05)  # Small sleep to prevent CPU hogging
+                time.sleep(0.01)  # Small sleep to prevent CPU hogging
 
         except Exception as e:
             logger.error(f"Error in RobotBrain: {e}")

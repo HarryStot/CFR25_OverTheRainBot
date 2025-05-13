@@ -90,7 +90,13 @@ class PositionManager:
 
     # Getters
     def get_position(self):
-        """Get current robot position (x, y, orientation)"""
+        """
+        Retrieves the current position coordinates (x, y, z) of the object in a thread-safe manner.
+        The position values are protected by a lock to ensure safe concurrent access.
+
+        :raises None: This method does not explicitly raise any exceptions.
+        :returns: A tuple containing the x, y, and z coordinates of the object.
+        """
         with self._lock:
             return self._pos_x, self._pos_y, self._pos_z
 
