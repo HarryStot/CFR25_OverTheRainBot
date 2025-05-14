@@ -13,14 +13,26 @@ public:
     MotorUP(String name, int pin) : Component(name), pin(pin), enabled(false) {
         pinMode(pin, OUTPUT);
         this->pin = pin;
+        this->enabled = false;
+        digitalWrite(pin, LOW); 
     }
 
+    void enable() {
+        enabled = true;
+        update(); 
+    }
+
+    void disable() {
+        enabled = false;
+        update(); 
+    }
+    
     void update() override {
         if (enabled) {
-            digitalWriteWrite(pin, HIGH); // Set the pin HIGH to enable the motor
+            digitalWrite(pin, HIGH); // Set the pin HIGH to enable the motor
 			
         } else {
-            digitalWriteWrite(pin, LOW); // Set the pin LOW to disable the motor
+            digitalWrite(pin, LOW); // Set the pin LOW to disable the motor
         }
     }
 	

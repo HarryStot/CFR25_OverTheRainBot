@@ -48,7 +48,7 @@ public:
 
     void update() override {
         if (enabled) {
-			int pwmValue = constrain(A * speed, 0, 255);
+			int pwmValue = constrain(1 * speed, 0, 255);
             analogWrite(pinPWM, pwmValue);  
             /*
 			Serial.print(" PWM ");

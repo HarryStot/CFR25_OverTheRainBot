@@ -17,14 +17,15 @@ public:
     Trajectory() : currentIndex(0) {}
 
     void addWaypoint(double x, double y, double theta) {
-        waypoints.add(Waypoint{x, y, theta});
+       waypoints.add(Waypoint{x, y, theta});
     }
 
     Waypoint getNextWaypoint() {
         if (currentIndex < waypoints.size()) {
-            return waypoints.get(currentIndex);
+            Waypoint next = waypoints.get(currentIndex);
+            return next;
         }
-        return {0, 0, 0};  // Default when finished
+        return {0, 0, 0}; 
     }
 
     void advanceWaypoint() {

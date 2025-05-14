@@ -31,6 +31,9 @@ public:
         }
     }
 
+    RobotState getState() const {
+        return state;
+    }
 public:
     Robot(double wheel_radius, double wheel_base)
         : odometry(wheel_radius, wheel_base), motionController(1.0, 1.5), state(RobotState::IDLE) {}
@@ -59,17 +62,17 @@ public:
         MotorUP* motorUP = static_cast<MotorUP*>(getComponent("motorUP"));
 
 
-        if (!wheelL || !wheelR || !sensor) return;
-		//if (!wheelL || !wheelR) return;
+        if (!wheelL || !wheelR || !sensor || !motorUP) return;
 
         odometry.update(wheelL->getEncoderValue(), wheelR->getEncoderValue());
         double distance = sensor->getDistance();
 
         switch (state) {
             case RobotState::IDLE:
+
                 if (!trajectory.isFinished()) {
                     state = RobotState::NAVIGATING;
-                }
+                } 
                 break;
 
             case RobotState::NAVIGATING:
@@ -79,8 +82,7 @@ public:
                     break;
                 }*/
 				
-				
-			
+						
                 if (!trajectory.isFinished()) {
                     Waypoint target = trajectory.getNextWaypoint();
                     double leftSpeed, rightSpeed;
@@ -89,33 +91,44 @@ public:
                         odometry.getX(), odometry.getY(), odometry.getTheta(),
                         target, leftSpeed, rightSpeed);
 					
-					// int pwmLeft = constrain(int(fabs(leftSpeed) * 255.0 / 1.0), 0, 255);
-					// int pwmRight = constrain(int(fabs(rightSpeed) * 255.0 / 1.0), 0, 255);
-					
-					bool dirL = leftSpeed >= 0;
-					bool dirR = rightSpeed >= 0;
-					
+                            // Debug: Print current position and target
+                    Serial.print("Current position: (");
+                    Serial.print(odometry.getX());
+                    Serial.print(", ");
+                    Serial.print(odometry.getY());
+                    Serial.println(")");
+                    
+                    Serial.print("Target: (");
+                    Serial.print(target.x);
+                    Serial.print(", ");
+                    Serial.print(target.y);
+                    Serial.println(")");
+                    
+                    // Debug: Print speeds
+                    Serial.print("Left Speed: ");
+                    Serial.print(leftSpeed);
+                    Serial.print(" | Right Speed: ");
+                    Serial.println(rightSpeed);
+
+                    const int MAX_SPEED = 255;
+                    leftSpeed = map(constrain(abs(leftSpeed), 0, 1), 0, 1, 0, MAX_SPEED);
+                    rightSpeed = map(constrain(abs(rightSpeed), 0, 1), 0, 1, 0, MAX_SPEED);
+           
+
 					// Met à jour les moteurs avec les vitesses calculées
 					wheelL->setSpeed(leftSpeed);   
 					wheelR->setSpeed(rightSpeed);  
 					
-					wheelL->setDirection(true, dirL);
-					wheelR->setDirection(true, dirR);
-					
-					// Déplace les moteurs
+					wheelL->setDirection(true, leftSpeed >= 0);
+                    wheelR->setDirection(true, rightSpeed >= 0);
+				
 					wheelL->update();
 					wheelR->update();	
-					/*
-					// Debug pour vérifier les vitesses
-					Serial.print("Left Speed: ");
-					Serial.print(leftSpeed);
-					Serial.print(" | Right Speed: ");
-					Serial.println(rightSpeed);
-					*/
+
 					double distanceToTarget = sqrt(pow(target.x - odometry.getX(), 2) +
                                                    pow(target.y - odometry.getY(), 2));
 
-                    
+                    /*
 					if (sensor) {
 						sensor->update();  
 						double distance = sensor->getDistance();
@@ -123,13 +136,16 @@ public:
 						Serial.print("Test Capteur Ultrasonique - Distance : ");
 						Serial.print(distance);
 						Serial.println(" cm");
-                        */
-					}
+                        
+					}*/
 					
 					if (distanceToTarget < 0.05) {
+                        Serial.println("Waypoint reached!");
                         trajectory.advanceWaypoint();
-                        taskStartTime = millis(); // Start task timer
-                        state = RobotState::STOPPED;
+                        if (trajectory.isFinished()) {
+                            Serial.println("Navigation completed!");
+                            state = RobotState::STOPPED;
+                        }
                     }
                 } else {
                     state = RobotState::STOPPED;
@@ -151,8 +167,7 @@ public:
                 }
                 break;*/
 				
-				Serial.println("Skipping obstacle (no sensor available). Resuming navigation.");
-                state = RobotState::NAVIGATING;
+				state = RobotState::NAVIGATING;
                 break;
 
             case RobotState::EXECUTING_TASK:
@@ -173,18 +188,20 @@ public:
                 wheelR->setSpeed(0);
                 if (millis() - taskStartTime >= 3000) { // Wait 3 sec
                     Serial.println("Dancing!");
-                    MotorUP.enabled = true; // Enable the motor
+                    motorUP->enable(); 
+                    motorUP->update();
+                    state = RobotState::STOPPED;
                 }
-                motorUP->update();
+                
                 break;
-            }
+            
         }
     }
 
     void addWaypoint(double x, double y, double theta) {
         trajectory.addWaypoint(x, y, theta);
         if (state == RobotState::IDLE) {
-            state = RobotState::NAVIGATING;
+            state = RobotState::NAVIGATING;           
         }
     }
 

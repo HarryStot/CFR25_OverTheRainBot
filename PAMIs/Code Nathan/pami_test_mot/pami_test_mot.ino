@@ -1,10 +1,10 @@
+#include <Arduino.h>
 #include "src/Robot.h"
 
 #define ENCODER_L_A 2
 #define ENCODER_L_B 11
 #define ENCODER_R_A 3
 #define ENCODER_R_B 12
-#define ENCODER_R_A 3
 #define ULTRASONIC_TRIG A0
 #define ULTRASONIC_ECHO A1
 
@@ -32,16 +32,18 @@ void rightEncoderISR() {
     // Serial.println(wheelR->getEncoderValue());
 }
 
+
 void setup() {
 	Serial.begin(115200);
-
+    
 	robot = new Robot(WHEEL_RADIUS, WHEEL_BASE);
 	
 	Serial.println("Robot initialized.");
 
     wheelL = new Wheel("wheelL", 4, 5, 10);
 	wheelR = new Wheel("wheelR", 6, 7, 9);
-	ultrasonic = new UltrasonicSensor("Ultrasonic sensor", ULTRASONIC_TRIG, ULTRASONIC_ECHO);
+
+    ultrasonic = new UltrasonicSensor("Ultrasonic sensor", ULTRASONIC_TRIG, ULTRASONIC_ECHO);
     motorUP = new MotorUP("MotorUP", 8);
 	
 	robot->addComponent("wheelL", wheelL);
@@ -57,27 +59,20 @@ void setup() {
     attachInterrupt(digitalPinToInterrupt(ENCODER_L_A), leftEncoderISR, RISING);
 	attachInterrupt(digitalPinToInterrupt(ENCODER_R_A), rightEncoderISR, RISING);
 	
-	// robot->addWaypoint(0.3, 0, 0);
-    /*
-    // Test speed 100 for both wheels
-    wheelL->setSpeed(150*2);
-    wheelR->setSpeed(150*2);
+	robot->addWaypoint(1, 0, 0);
 
-    wheelL->setDirection(true, true); // Forward
-    wheelR->setDirection(true, true); // Forward
-    */
 }
-
 void loop() {
-	//robot->updateAll();
+	robot->updateAll();
 
     if (Serial.available()) {
         char c = Serial.read();
         if (c == 's') {
             robot->stop();
+            Serial.println("Robot stopped.");
         }
     }
-	
+
 	// TODO: Add manual control
     delay(10);
 }
