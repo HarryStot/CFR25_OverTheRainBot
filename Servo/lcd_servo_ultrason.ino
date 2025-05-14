@@ -7,7 +7,7 @@
 Adafruit_PWMServoDriver pwm = Adafruit_PWMServoDriver(); 
 
 // Création d'un objet pour l'écran LCD I2C
-LiquidCrystal_I2C lcd(0x20, 16, 2); // Adresse I2C à adapter si nécessaire
+LiquidCrystal_I2C lcd(0x20, 16, 2); // Adresse I2C à adapter si nécessaire 20 40 7C ??
 
 int MODE_servo = 0; // 0 pour le mode servo, 1 pour le mode capteur
 
@@ -17,14 +17,14 @@ int MODE_servo = 0; // 0 pour le mode servo, 1 pour le mode capteur
 #define MAX_DISTANCE 45 // Maximum distance (in cm) to ping.
 
 //Pin capteur 1
-#define ECHO_PIN_1 18
-#define TRIG_PIN_1 4
+#define ECHO_PIN_1 8
+#define TRIG_PIN_1 9
 //Pin capteur 2
-#define ECHO_PIN_2 19
-#define TRIG_PIN_2 5
+#define ECHO_PIN_2 10
+#define TRIG_PIN_2 11
 //Pin capteur 3
-#define ECHO_PIN_3 20
-#define TRIG_PIN_3 6
+#define ECHO_PIN_3 12
+#define TRIG_PIN_3 13
 
 float vitesse_son = sqrt(1 + 25 / 273.15) / 60.368;
 float mesure;
