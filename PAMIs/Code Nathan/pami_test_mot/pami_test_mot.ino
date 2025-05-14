@@ -58,32 +58,23 @@ void setup() {
 	attachInterrupt(digitalPinToInterrupt(ENCODER_R_A), rightEncoderISR, RISING);
 	
 	// robot->addWaypoint(0.3, 0, 0);
-
+    /*
     // Test speed 100 for both wheels
     wheelL->setSpeed(150*2);
     wheelR->setSpeed(150*2);
 
     wheelL->setDirection(true, true); // Forward
     wheelR->setDirection(true, true); // Forward
+    */
 }
 
 void loop() {
-    analogWrite(8, 100); 
-    delay(1000); // Wait for 1 second
-
-    analogWrite(8, 0); // Stop the motor    
-    delay(1000); // Wait for 1 second
-
 	//robot->updateAll();
-	
 
     if (Serial.available()) {
         char c = Serial.read();
         if (c == 's') {
             robot->stop();
-        } else if (c == 'd') { // Commande pour activer le mode DANCING
-            Serial.println("Activating DANCING mode...");
-            robot->setState(RobotState::DANCING); // Transition vers l'état DANCING
         }
     }
 	

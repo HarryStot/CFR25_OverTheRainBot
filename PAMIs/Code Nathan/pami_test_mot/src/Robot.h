@@ -117,13 +117,13 @@ public:
 
                     
 					if (sensor) {
-						sensor->update();  // Assure-toi que la lecture est à jour
+						sensor->update();  
 						double distance = sensor->getDistance();
+                        /*
 						Serial.print("Test Capteur Ultrasonique - Distance : ");
 						Serial.print(distance);
 						Serial.println(" cm");
-					} else {
-						Serial.println("Capteur ultrasonique non trouvé !");
+                        */
 					}
 					
 					if (distanceToTarget < 0.05) {
@@ -169,13 +169,13 @@ public:
                 break;
 
             case RobotState::DANCING:
+                wheelL->setSpeed(0);
+                wheelR->setSpeed(0);
                 if (millis() - taskStartTime >= 3000) { // Wait 3 sec
                     Serial.println("Dancing!");
-                    if (motorUP) {
-                        motorUP->setSpeed(100); 
-                        motorUP->update();
-                    } 
-                state = RobotState::STOPPED;
+                    MotorUP.enabled = true; // Enable the motor
+                }
+                motorUP->update();
                 break;
             }
         }

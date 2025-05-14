@@ -6,30 +6,21 @@
 
 class MotorUP : public Component {
 private:
-    int speed;
     int pin;
     bool enabled;
         
 public:
-    MotorUP(String name, int pin) : Component(name), speed(0), pin(pin), enabled(false) {
+    MotorUP(String name, int pin) : Component(name), pin(pin), enabled(false) {
         pinMode(pin, OUTPUT);
         this->pin = pin;
     }
 
-    void setSpeed(int speed) { this->speed = speed;} 
-
-    int getSpeed() const { return speed; }
-
     void update() override {
         if (enabled) {
-			int Value = constrain(speed, 0, 255);
-            analogWrite(pin, Value);  
-            
-			Serial.print(" Value ");
-			Serial.println(Value);
+            digitalWriteWrite(pin, HIGH); // Set the pin HIGH to enable the motor
 			
         } else {
-            analogWrite(pin, 0); 
+            digitalWriteWrite(pin, LOW); // Set the pin LOW to disable the motor
         }
     }
 	
