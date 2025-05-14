@@ -8,7 +8,7 @@ LiquidCrystal_I2C lcd(0x20, 16, 2);
 
 int MODE_servo = 0;
 
-/* ###################### Ultrason ################# */
+/* ###################### Ultrason ################## */
 #define NB_CAPTEUR 3
 #define MAX_DISTANCE 45
 
