@@ -7,7 +7,7 @@ logging.basicConfig(level=logging.INFO,
                     format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-pull_switch_pin = 17  # GPIO pin number for the pull switch
+pull_switch_pin = 27  # GPIO pin number for the pull switch
 GPIO.setmode(GPIO.BCM)  # Use BCM pin numbering
 GPIO.setup(pull_switch_pin, GPIO.IN, pull_up_down=GPIO.PUD_UP)  # Set pin as input with pull-up resistor
 

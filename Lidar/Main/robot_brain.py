@@ -48,6 +48,7 @@ class RobotState(Enum):
     RETURNING_TO_END = 4  # Going to the end zone when time is almost up
     COMPLETED = 5  # Mission completed
     ERROR = 6  # Error state
+    IDLE = 7  # Idle state, waiting for new locations
 
 
 class Task:
@@ -206,6 +207,10 @@ class RobotBrain(threading.Thread):
         self.state_changed = threading.Event()
         self.avoidance_enabled = False
 
+        # Last position sent to the robot
+        self.last_sent_position = None  # Last position sent to the robot
+        self.last_sent_orientation = None  # Last orientation sent to the robot
+
         # Team and timing variables
         self.is_blue_team = None  # True for blue team, False for yellow team
         self.mission_start_time = 0  # When the pull switch was activated
@@ -218,8 +223,8 @@ class RobotBrain(threading.Thread):
         self.current_task_index = -1
 
         # Navigation parameters
-        self.position_tolerance = 2.0  # [cm]
-        self.orientation_tolerance = 1.0  # [degrees]
+        self.position_tolerance = 4  # [cm]
+        self.orientation_tolerance = 1.5  # [degrees]
         self.obstacle_detected = False
         self.navigation_timeout = 60  # [seconds]
         self.navigation_start_time = 0
@@ -233,9 +238,9 @@ class RobotBrain(threading.Thread):
 
         # GPIO configuration
         GPIO.setmode(GPIO.BCM)
-        self.team_select_pin = 17  # GPIO pin for team selection switch
-        self.validation_pin = 27  # GPIO pin for validation button
-        self.pull_switch_pin = 18  # GPIO pin for pull switch to start
+        self.team_select_pin = 27  # GPIO pin for team selection switch
+        self.validation_pin = 21  # GPIO pin for validation button
+        self.pull_switch_pin = 17  # GPIO pin for pull switch to start
         GPIO.setup(self.team_select_pin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
         GPIO.setup(self.validation_pin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
         GPIO.setup(self.pull_switch_pin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
@@ -249,6 +254,10 @@ class RobotBrain(threading.Thread):
         # Last calculated control command (for debugging)
         self.last_v = 0.0
         self.last_omega = 0.0
+
+        # Last LCD message sent
+        self.last_lcd_line1 = ""
+        self.last_lcd_line2 = ""
 
     def __del__(self):
         """
@@ -353,7 +362,7 @@ class RobotBrain(threading.Thread):
 
         """
         # Check team selection switch
-        if GPIO.input(self.team_select_pin) == GPIO.HIGH:
+        if GPIO.input(self.team_select_pin) == GPIO.LOW:
             self.is_blue_team = True
             team_name = "BLUE TEAM"
             logger.info("Blue team selected")
@@ -366,7 +375,7 @@ class RobotBrain(threading.Thread):
         self.send_lcd_message("SELECT TEAM:", team_name)
 
         # Check if validation button is pressed to confirm team selection
-        if GPIO.input(self.validation_pin) == GPIO.HIGH:
+        if GPIO.input(self.validation_pin) == GPIO.LOW:
             logger.info("Validation button pressed, confirming team selection")
 
             # Update position manager with team selection
@@ -468,26 +477,32 @@ class RobotBrain(threading.Thread):
         # FIXME: Change values
         if self.is_blue_team:
             # Blue team mission waypoints
-            self.add_location(Location("BlueStart", 30, 30, 0))
-            self.add_location(Location("BlueActionPoint1", 50, 70, 90, [
-                Task("GrabBlueItem", "GRAB", {"S": 1}, 3)
-            ]))
-            self.add_location(Location("BlueActionPoint2", 90, 80, 180, [
-                Task("DropBlueItem", "DROP", {"S": 1}, 2)
-            ]))
-            # Add more blue team locations as needed
-            self.add_location(Location("BlueEndZone", 180, 30, 270))
+            self.add_location(Location("Test", 100, 0, 0))
+            self.add_location(Location("Test 2", 200, 0, 0))
+
+            # self.add_location(Location("BlueStart", 30, 30, 0))
+            # self.add_location(Location("BlueActionPoint1", 50, 70, 90, [
+            #     Task("GrabBlueItem", "GRAB", {"S": 1}, 3)
+            # ]))
+            # self.add_location(Location("BlueActionPoint2", 90, 80, 180, [
+            #     Task("DropBlueItem", "DROP", {"S": 1}, 2)
+            # ]))
+            # # Add more blue team locations as needed
+            # self.add_location(Location("BlueEndZone", 180, 30, 270))
         else:
             # Yellow team mission waypoints
-            self.add_location(Location("YellowStart", 270, 30, 180))
-            self.add_location(Location("YellowActionPoint1", 250, 70, 90, [
-                Task("GrabYellowItem", "GRAB", {"S": 2}, 3)
-            ]))
-            self.add_location(Location("YellowActionPoint2", 210, 80, 0, [
-                Task("DropYellowItem", "DROP", {"S": 2}, 2)
-            ]))
-            # Add more yellow team locations as needed
-            self.add_location(Location("YellowEndZone", 120, 30, 270))
+            self.add_location(Location("Test", 100, 0, 0))
+            self.add_location(Location("Test 2", 200, 0, 0))
+
+            # self.add_location(Location("YellowStart", 270, 30, 180))
+            # self.add_location(Location("YellowActionPoint1", 250, 70, 90, [
+            #     Task("GrabYellowItem", "GRAB", {"S": 2}, 3)
+            # ]))
+            # self.add_location(Location("YellowActionPoint2", 210, 80, 0, [
+            #     Task("DropYellowItem", "DROP", {"S": 2}, 2)
+            # ]))
+            # # Add more yellow team locations as needed
+            # self.add_location(Location("YellowEndZone", 120, 30, 270))
 
         logger.info(f"Loaded {len(self.locations)} locations for {'blue' if self.is_blue_team else 'yellow'} team")
 
@@ -509,6 +524,7 @@ class RobotBrain(threading.Thread):
             self.current_location_index += 1
             self.current_task_index = -1
             logger.info(f"Moving to next location: {self.locations[self.current_location_index]}")
+            time.sleep(0.5)  # Allow some time for the robot to prepare
             self.set_state(RobotState.NAVIGATING)
             self.navigation_start_time = time.time()
         else:
@@ -539,7 +555,7 @@ class RobotBrain(threading.Thread):
 
         if remaining_time <= self.end_zone_time:
             logger.warning(f"Only {remaining_time:.1f} seconds remaining! Heading to end zone.")
-            self.set_state(RobotState.RETURNING_TO_END)
+            # self.set_state(RobotState.RETURNING_TO_END)
             return
 
         # Check if navigation timed out
@@ -570,12 +586,13 @@ class RobotBrain(threading.Thread):
                 orientation_diff = abs(current_z - current_location.orientation) % 360
                 orientation_diff = min(orientation_diff, 360 - orientation_diff)
 
-                if orientation_diff > self.orientation_tolerance:
-                    # Need to adjust orientation
-                    self.send_movement_command(
-                        f"GX{current_location.x:.2f}Y{current_location.y:.2f}Z{current_location.orientation:.2f}")
-                    logger.info(f"Adjusting orientation to {current_location.orientation} degrees")
-                    return
+                # if orientation_diff > self.orientation_tolerance:
+                #     # Need to adjust orientation
+                #               #
+                #     self.send_movement_command(
+                #         f"GX{current_location.x/100:.2f}Y{current_location.y/100:.2f}Z{current_location.orientation/100:.2f}")
+                #     logger.info(f"Adjusting orientation to {current_location.orientation} degrees")
+                #     return
 
             logger.info(f"Reached location: {current_location.name}")
             self.send_movement_command("S")  # Stop the robot
@@ -585,8 +602,7 @@ class RobotBrain(threading.Thread):
                 self.set_state(RobotState.EXECUTING_TASK)
                 self.task_start_time = time.time()
             else:
-                # No tasks, go back to IDLE
-                self.set_state(RobotState.IDLE)  # FIXME: Change to NAVIGATING?
+                self.set_state(RobotState.IDLE)
         elif self.avoidance_enabled:
 
             # Navigation using potential field
@@ -627,6 +643,9 @@ class RobotBrain(threading.Thread):
             # Send movement command to robot
             self.send_movement_command(f"GX{waypoint_x:.2f}Y{waypoint_y:.2f}Z{new_heading_deg:.2f}")
 
+            # Display the current position
+            self.send_lcd_message(f"Team {'Blue' if self.is_blue_team else 'Yellow'}", "X: {:.2f} Y: {:.2f}".format(current_x, current_y))
+
             # Log navigation status
             if self.obstacles:
                 logger.info(
@@ -636,7 +655,19 @@ class RobotBrain(threading.Thread):
 
         elif not self.avoidance_enabled:
             # Simple direct navigation without potential field
-            self.send_movement_command(f"GX{current_location.x:.2f}Y{current_location.y:.2f}Z{current_z:.2f}")
+
+            # Check if we already sent the last position
+            if self.last_sent_position == (current_location.x, current_location.y):
+                logger.debug("Already sent last position, skipping movement command")
+                self.send_lcd_message(f"Team {'Blue' if self.is_blue_team else 'Yellow'}",
+                                      "X: {:.2f} Y: {:.2f}".format(current_x, current_y))
+                return
+            else:
+                # Update last sent position
+                self.last_sent_position = (current_location.x, current_location.y)
+
+            self.send_movement_command(f"GX{current_location.x/100:.2f}Y{current_location.y/100:.2f}Z{current_z/100:.2f}")
+
             logger.info(f"Directly navigating to {current_location.name}, distance: {distance:.2f}")
 
     def handle_executing_task_state(self):
@@ -699,7 +730,7 @@ class RobotBrain(threading.Thread):
             return
 
         # Continue navigating to end zone
-        self.send_movement_command(f"GX{end_location.x:.2f}Y{end_location.y:.2f}Z{end_location.orientation:.2f}")
+        self.send_movement_command(f"GX{end_location.x/100:.2f}Y{end_location.y/100:.2f}Z{end_location.orientation/100:.2f}")
         logger.info(f"Returning to end zone, distance: {distance:.2f}")
 
         # Check if we're about to run out of time
@@ -761,10 +792,10 @@ class RobotBrain(threading.Thread):
                 logger.info(f"Sent movement command: {command}")
             except Exception as e:
                 logger.error(f"Error sending movement command: {e}")
-                self.set_state(RobotState.ERROR)
+                # self.set_state(RobotState.ERROR)
         else:
             logger.error("Movement interface not connected, cannot send command")
-            self.set_state(RobotState.ERROR)
+            # self.set_state(RobotState.ERROR)
 
     def send_action_command(self, command, params=None):
         """
@@ -778,9 +809,9 @@ class RobotBrain(threading.Thread):
               params: {"L1": "Hello", "L2": "World"}
               full_command: "LCDL1Hello;L2World"
             - command: "SRV"
-              params: {"id": "angle:speed"}
+              params: {"id": "angle:speed", "id2": "angle:speed"}
               full_command: "SRVid:angle:speed"
-            - command: "STEP
+            - command: "STEP"
               params: {"step": "1"} FIXME: Change to actual command
               full_command: "STEPstep1"
             - command: "US" (ultrasonic sensor)
@@ -805,10 +836,10 @@ class RobotBrain(threading.Thread):
                 logger.info(f"Sent action command: {command}{params_str}")
             except Exception as e:
                 logger.error(f"Error sending action command: {e}")
-                self.set_state(RobotState.ERROR)
+                # self.set_state(RobotState.ERROR)
         else:
             logger.error("Action interface not connected, cannot send command")
-            self.set_state(RobotState.ERROR)
+            # self.set_state(RobotState.ERROR)
 
     def set_obstacle_detected(self, detected):
         """
@@ -841,15 +872,21 @@ class RobotBrain(threading.Thread):
         :return: None
         """
         params = {
-            "L1": line1,
-            "L2": line2
+            "L1:": line1,
+            "L2:": line2
         }
+        if line1 == self.last_lcd_line1 and line2 == self.last_lcd_line2:
+            # No change in message, do not send again
+            return
+        self.last_lcd_line1 = line1
+        self.last_lcd_line2 = line2
         # Use the action command method to send LCD commands
         self.send_action_command("LCD", params)
         logger.debug(f"Sent to LCD - Line 1: '{line1}', Line 2: '{line2}'")
 
     def run(self):
         """Main brain thread function"""
+        # logger.info("Running main loop...")
         try:
             # Check if interfaces are connected
             if not (self.movement_interface and self.movement_interface.connected):
@@ -869,6 +906,8 @@ class RobotBrain(threading.Thread):
                     self.handle_navigating_state()
                 elif self.current_state == RobotState.EXECUTING_TASK:
                     self.handle_executing_task_state()
+                elif self.current_state == RobotState.IDLE:
+                    self.handle_idle_state()
                 elif self.current_state == RobotState.RETURNING_TO_END:
                     self.handle_returning_to_end_state()
                 elif self.current_state == RobotState.COMPLETED:
@@ -876,7 +915,7 @@ class RobotBrain(threading.Thread):
                 elif self.current_state == RobotState.ERROR:
                     self.handle_error_state()
 
-                time.sleep(0.01)  # Small sleep to prevent CPU hogging
+                time.sleep(0.005)  # Small sleep to prevent CPU hogging
 
         except Exception as e:
             logger.error(f"Error in RobotBrain: {e}")

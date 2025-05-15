@@ -12,7 +12,7 @@
       <paths name="overtherainbot@100.102.161.15:22 password">
         <serverdata>
           <mappings>
-            <mapping deploy="/home/overtherainbot/Documents/src" local="$PROJECT_DIR$" web="/" />
+            <mapping deploy="Documents/src" local="$PROJECT_DIR$" web="/" />
           </mappings>
         </serverdata>
       </paths>

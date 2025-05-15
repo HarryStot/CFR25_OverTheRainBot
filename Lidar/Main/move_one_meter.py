@@ -40,7 +40,7 @@ def main():
         robot_interface.send_command("V150")
 
         logger.info("Sending command to move 1 meter...")
-        robot_interface.send_command("GX0.00Y1.00Z1.57")
+        robot_interface.send_command("GX1.00Y0.00Z0.00")
 
         logger.info("Waiting for the end of the movement...")
         time.sleep(5)  # TODO: remove

@@ -104,8 +104,10 @@ def main():
         action_robot_interface.start()
         logger.info("Starting RobotInterfaces...")
 
-        # Wait for the interface to connect
-        time.sleep(1)
+        # Wait longer for interfaces to connect
+        wait_time = 5  # seconds
+        logger.info(f"Waiting {wait_time} seconds for interfaces to connect...")
+        time.sleep(wait_time)
 
         # Start the lidar thread
         lidar_thread = LidarThread('/dev/ttyUSB0', stop_event, end_event, debugCV=True)

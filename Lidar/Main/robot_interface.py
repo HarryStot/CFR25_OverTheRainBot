@@ -58,6 +58,7 @@ class RobotInterface(threading.Thread):
                 self.ser = serial.Serial(self.serial_port, self.baud_rate, timeout=1)
                 time.sleep(2)  # Waiting for the serial port to open
 
+                # FIXME: Adapt fot movement and action
                 if self.ser.is_open:
                     logger.info(f"{self.serial_port} connected!")
                     self.ser.reset_input_buffer()
@@ -104,14 +105,15 @@ class RobotInterface(threading.Thread):
                 break
 
             finally:
-                if self.ser and self.ser.is_open:
-                    try:
-                        self.ser.close()
-                        logger.info("Serial port closed")
-                    except Exception as e:
-                        logger.error(f"Error closing the serial port: {e}")
-
-                self.connected = False
+                # if self.ser and self.ser.is_open and not self.stop_event.is_set():
+                #     try:
+                #         self.ser.close()
+                #         logger.info("Serial port closed")
+                #     except Exception as e:
+                #         logger.error(f"Error closing the serial port: {e}")
+                #
+                # self.connected = False
+                logger.warning("Robot disconnected")
 
         if retry_count >= max_retries:
             logger.error(f"Échec de connexion après {max_retries} tentatives")
@@ -127,11 +129,11 @@ class RobotInterface(threading.Thread):
                 z_match = re.search(r'Z:?\s*([-+]?[0-9]*\.?[0-9]+)', line)
 
                 if all([x_match, y_match, z_match]):
-                    x = float(x_match.group(1))
-                    y = float(y_match.group(1))
-                    z = float(z_match.group(1))
+                    x = float(x_match.group(1)) * 100
+                    y = float(y_match.group(1)) * 100
+                    z = float(z_match.group(1)) * 100
                     position_manager.set_position(x, y, z)
-                    logger.info(f"Position updated: X={x}, Y={y}, Z={z}")
+                    logger.debug(f"Position updated: X={x}, Y={y}, Z={z}")
                 else:
                     missing = []
                     if not x_match: missing.append("X")

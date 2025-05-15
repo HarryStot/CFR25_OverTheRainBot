@@ -48,11 +48,11 @@ class PositionManager:
         # Team-specific positions
         self._team_configs = {
             Team.YELLOW: {
-                'initial_pos': (10, 10, 90),  # x, y, orientation TODO: Change
+                'initial_pos': (0, 0, 0),  # x, y, orientation TODO: Change
                 'target_pos': (150, 180),  # x, y TODO: Remove?
             },
             Team.BLUE: {
-                'initial_pos': (290, 10, 90),  # x, y, orientation TODO: Change
+                'initial_pos': (0, 0, 0),  # x, y, orientation TODO: Change
                 'target_pos': (150, 180),  # x, y TODO: Remove?
             }
         }

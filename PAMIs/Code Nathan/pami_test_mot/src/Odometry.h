@@ -2,6 +2,7 @@
 #define ODOMETRY_H
 
 #include <Arduino.h>
+#include <SoftwareSerial.h>
 
 class Odometry {
 private:

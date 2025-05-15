@@ -11,12 +11,12 @@ private:
 
 public:
 	// Better construct
-    Wheel(String name, int pinA, int pinB, int pinPWM) : Component(name), motor(new Motor(name + "_Motor", pinA, pinB, pinPWM, 0.5)), encoder(name + "_Encoder") {
+    Wheel(String name, int pinA, int pinB, int pinPWM) : Component(name), motor(new Motor(name + "_Motor", pinA, pinB, pinPWM, 55)), encoder(name + "_Encoder") {
         motor->setSpeed(0);
         motor->setDirection(false, false);
     }
 
-    void setSpeed(int speed) { motor->setSpeed(speed); }
+    void setSpeed(float speed) { motor->setSpeed(speed); }
     int getSpeed() const { return motor->getSpeed(); }
 	
 	void setDirection(bool enabled, bool direction) { motor->setDirection(enabled, direction); }

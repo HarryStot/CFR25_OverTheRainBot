@@ -6,7 +6,7 @@
 
 class Motor : public Component {
 private:
-    int speed; // Speed in m/s ?
+    float speed; // Speed in m/s ?
     bool direction;
     bool enabled;
     int pinA;
@@ -24,9 +24,9 @@ public:
         this->pinPWM = pinPWM;
     }
 
-    void setSpeed(int speed) { this->speed = speed;} 
+    void setSpeed(float speed) { this->speed = speed;} 
 
-    int getSpeed() const { return speed; }
+    float getSpeed() const { return speed; }
 
     void setDirection(bool enabled, bool direction) { 
         this->direction = direction;
@@ -48,12 +48,29 @@ public:
 
     void update() override {
         if (enabled) {
-			int pwmValue = constrain(A * speed, 0, 255);
-            analogWrite(pinPWM, pwmValue);  
-            /*
-			Serial.print(" PWM ");
-			Serial.println(pwmValue);
-			*/
+            if (speed > 0) {
+                this->direction = true;
+                this->setDirection(enabled, direction);
+            } else if (speed < 0) {
+                this->direction = false;
+                this->setDirection(enabled, direction);
+            }
+            
+			int pwmValue = (int) constrain(A * speed, 0, 255);
+
+            // Dynamic gain
+            // if (pwmValue < 50) {
+            //     pwmValue = (int) constrain(2 * A * speed, 0, 255);
+            // } else if (pwmValue > 200) {
+            //     pwmValue = (int) constrain(0.75 * A * speed, 0, 255);
+            // }
+
+
+            analogWrite(pinPWM, pwmValue);
+            
+			// Serial.print("PWM: ");
+			// Serial.println(pwmValue);
+			
         } else {
             analogWrite(pinPWM, 0); 
         }

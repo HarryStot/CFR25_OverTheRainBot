@@ -11,7 +11,7 @@ private:
     double rotationGain;
 
 public:
-    MotionController(double speedGain = 1.0, double rotationGain = 1.5)
+    MotionController(double speedGain = 0.2, double rotationGain = 1.0)
         : speedGain(speedGain), rotationGain(rotationGain) {}
 
     void computeSpeed(double currentX, double currentY, double currentTheta,
@@ -26,6 +26,7 @@ public:
 
         leftSpeed = forwardSpeed - rotationSpeed;
 		rightSpeed = forwardSpeed + rotationSpeed;
+        
 		/*	
 		// Debug : affichage des vitesses
 		Serial.print("Left Speed: ");

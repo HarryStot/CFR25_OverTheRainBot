@@ -1,4 +1,5 @@
 #include "src/Robot.h"
+#include <HardwareSerial.h>
 
 #define ENCODER_L_A 2
 #define ENCODER_L_B 11
@@ -11,9 +12,9 @@
 const double WHEEL_RADIUS = 0.04;
 const double WHEEL_BASE = 0.10;
 
-Robot* robot = nullptr;
+Robot* robot;
 
-//Robot robot(WHEEL_RADIUS, WHEEL_BASE);
+// Robot robot(WHEEL_RADIUS, WHEEL_BASE);
 
 Wheel* wheelL;
 Wheel* wheelR;
@@ -57,25 +58,27 @@ void setup() {
     attachInterrupt(digitalPinToInterrupt(ENCODER_L_A), leftEncoderISR, RISING);
 	attachInterrupt(digitalPinToInterrupt(ENCODER_R_A), rightEncoderISR, RISING);
 	
-	// robot->addWaypoint(0.3, 0, 0);
+	robot->addWaypoint(1, 0, 0);
 
-    // Test speed 100 for both wheels
-    wheelL->setSpeed(150*2);
-    wheelR->setSpeed(150*2);
-
+    // wheelL->setSpeed(150*2);
+    // wheelR->setSpeed(150*2);
+ 
     wheelL->setDirection(true, true); // Forward
     wheelR->setDirection(true, true); // Forward
 }
 
 void loop() {
-    analogWrite(8, 100); 
-    delay(1000); // Wait for 1 second
+    // analogWrite(8, 100); 
+    // delay(1000); // Wait for 1 second
 
-    analogWrite(8, 0); // Stop the motor    
-    delay(1000); // Wait for 1 second
+    // analogWrite(8, 0); // Stop the motor    
+    // delay(1000); // Wait for 1 second
 
-	//robot->updateAll();
-	
+    // Serial.println("Looping...");
+	robot->updateAll();
+
+    // robot->updateOdometry(wheelL->getEncoderValue(), wheelR->getEncoderValue());
+
 
     if (Serial.available()) {
         char c = Serial.read();

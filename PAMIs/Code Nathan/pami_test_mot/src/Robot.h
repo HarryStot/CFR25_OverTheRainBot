@@ -11,6 +11,7 @@
 #include "RobotState.h"
 #include "UltrasonicSensor.h"
 #include "MotorUP.h"
+#include <HardwareSerial.h>
 
 class Robot {
 private:
@@ -53,17 +54,39 @@ public:
             components.get(i)->update();
         }
 
+
         Wheel* wheelL = static_cast<Wheel*>(getComponent("wheelL"));
         Wheel* wheelR = static_cast<Wheel*>(getComponent("wheelR"));
         UltrasonicSensor* sensor = static_cast<UltrasonicSensor*>(getComponent("ultrasonic"));
         MotorUP* motorUP = static_cast<MotorUP*>(getComponent("motorUP"));
 
-
-        if (!wheelL || !wheelR || !sensor) return;
+        // if (!wheelL || !wheelR || !sensor) return;
 		//if (!wheelL || !wheelR) return;
 
         odometry.update(wheelL->getEncoderValue(), wheelR->getEncoderValue());
-        double distance = sensor->getDistance();
+        // double distance = sensor->getDistance();
+
+        Serial.print("State: ");
+        switch (state) {
+            case RobotState::IDLE:
+                Serial.println("IDLE");
+                break;
+            case RobotState::NAVIGATING:
+                Serial.println("NAVIGATING");
+                break;
+            case RobotState::AVOIDING:
+                Serial.println("AVOIDING");
+                break;
+            case RobotState::EXECUTING_TASK:
+                Serial.println("EXECUTING_TASK");
+                break;
+            case RobotState::STOPPED:
+                Serial.println("STOPPED");
+                break;
+            case RobotState::DANCING:
+                Serial.println("DANCING");
+                break;
+        }
 
         switch (state) {
             case RobotState::IDLE:
@@ -97,7 +120,9 @@ public:
 					
 					// Met à jour les moteurs avec les vitesses calculées
 					wheelL->setSpeed(leftSpeed);   
-					wheelR->setSpeed(rightSpeed);  
+					wheelR->setSpeed(rightSpeed);
+                    // Serial.print("Left Speed: ");
+                    // Serial.print(leftSpeed);
 					
 					wheelL->setDirection(true, dirL);
 					wheelR->setDirection(true, dirR);
@@ -105,13 +130,13 @@ public:
 					// Déplace les moteurs
 					wheelL->update();
 					wheelR->update();	
-					/*
+					
 					// Debug pour vérifier les vitesses
 					Serial.print("Left Speed: ");
 					Serial.print(leftSpeed);
 					Serial.print(" | Right Speed: ");
 					Serial.println(rightSpeed);
-					*/
+					
 					double distanceToTarget = sqrt(pow(target.x - odometry.getX(), 2) +
                                                    pow(target.y - odometry.getY(), 2));
 
@@ -164,6 +189,8 @@ public:
 
             case RobotState::STOPPED:
                 Serial.println("Mission completed!");
+                wheelL->setSpeed(0);
+                wheelR->setSpeed(0);
                 wheelL->update();
                 wheelR->update();
                 break;
@@ -190,6 +217,10 @@ public:
 
     void stop() {
         state = RobotState::STOPPED;
+    }
+
+    void updateOdometry(double left_ticks, double right_ticks) {
+        odometry.update(left_ticks, right_ticks);
     }
 };
 
