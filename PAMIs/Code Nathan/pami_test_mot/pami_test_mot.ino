@@ -1,3 +1,4 @@
+#include <Arduino.h>
 #include "src/Robot.h"
 #include <HardwareSerial.h>
 
@@ -5,7 +6,6 @@
 #define ENCODER_L_B 11
 #define ENCODER_R_A 3
 #define ENCODER_R_B 12
-#define ENCODER_R_A 3
 #define ULTRASONIC_TRIG A0
 #define ULTRASONIC_ECHO A1
 
@@ -33,16 +33,18 @@ void rightEncoderISR() {
     // Serial.println(wheelR->getEncoderValue());
 }
 
+
 void setup() {
 	Serial.begin(115200);
-
+    
 	robot = new Robot(WHEEL_RADIUS, WHEEL_BASE);
 	
 	Serial.println("Robot initialized.");
 
     wheelL = new Wheel("wheelL", 4, 5, 10);
 	wheelR = new Wheel("wheelR", 6, 7, 9);
-	ultrasonic = new UltrasonicSensor("Ultrasonic sensor", ULTRASONIC_TRIG, ULTRASONIC_ECHO);
+
+    ultrasonic = new UltrasonicSensor("Ultrasonic sensor", ULTRASONIC_TRIG, ULTRASONIC_ECHO);
     motorUP = new MotorUP("MotorUP", 8);
 	
 	robot->addComponent("wheelL", wheelL);
@@ -66,7 +68,6 @@ void setup() {
     wheelL->setDirection(true, true); // Forward
     wheelR->setDirection(true, true); // Forward
 }
-
 void loop() {
     // analogWrite(8, 100); 
     // delay(1000); // Wait for 1 second
@@ -84,12 +85,10 @@ void loop() {
         char c = Serial.read();
         if (c == 's') {
             robot->stop();
-        } else if (c == 'd') { // Commande pour activer le mode DANCING
-            Serial.println("Activating DANCING mode...");
-            robot->setState(RobotState::DANCING); // Transition vers l'état DANCING
+            Serial.println("Robot stopped.");
         }
     }
-	
+
 	// TODO: Add manual control
     delay(10);
 }
