@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-
+import json
 import logging
+import os
 import threading
 import time
 from enum import Enum
@@ -456,55 +457,242 @@ class RobotBrain(threading.Thread):
 
     def load_team_missions(self):
         """
-        Loads mission waypoints specific to the team and populates them based on
-        predefined locations and tasks. This method clears any pre-existing locations
-        before adding new ones depending on the team's color (blue or yellow).
-        The mission waypoints include starting positions, action points with associated
-        tasks like grabbing or dropping items, and end zones. Tasks are initialized
-        with specific parameters, and debug logging is used to indicate the number
-        of locations loaded for the current team.
-
-        .. note::
-           This implementation currently hardcodes mission details for blue and yellow
-           teams. Future improvements may include loading mission data from a file or
-           a database.
-
-        :raises None: The method does not raise exceptions.
+        Loads mission waypoints from JSON files with support for variables, task templates,
+        movement templates, and action sequences.
         """
         self.clear_locations()
 
-        # TODO: Change this to load from a file or database or just hardcode for now
-        # FIXME: Change values
-        if self.is_blue_team:
-            # Blue team mission waypoints
+        # Determine which file to load based on team
+        mission_file = "blue_missions.json" if self.is_blue_team else "yellow_missions.json"
+        file_path = os.path.join(os.path.dirname(__file__), mission_file)
+
+        try:
+            with open(file_path, 'r') as f:
+                config = json.load(f)
+
+            # Extract configuration components
+            variables = config.get("variables", {})
+            task_templates = config.get("task_templates", {})
+            movement_templates = config.get("movement_templates", {})
+            action_sequences = config.get("action_sequences", {})
+            locations_data = config.get("locations", [])
+
+            # Process each location
+            for location_data in locations_data:
+                # Basic location properties
+                name = location_data["name"]
+                x = self._resolve_variables(location_data["x"], variables)
+                y = self._resolve_variables(location_data["y"], variables)
+                orientation = self._resolve_variables(location_data.get("orientation"), variables)
+
+                tasks = []
+
+                # Process action sequence if specified
+                if "action_sequence" in location_data and location_data["action_sequence"] in action_sequences:
+                    sequence_name = location_data["action_sequence"]
+                    sequence = action_sequences[sequence_name]
+                    params_override = location_data.get("params_override", {})
+
+                    # Convert action sequence to tasks
+                    tasks = self._process_action_sequence(
+                        sequence,
+                        task_templates,
+                        movement_templates,
+                        variables,
+                        params_override
+                    )
+                # Process individual tasks if specified
+                elif "tasks" in location_data and location_data["tasks"]:
+                    tasks = self._process_tasks(location_data["tasks"], task_templates, variables)
+
+                # Create Location object with processed data
+                self.add_location(Location(
+                    name=name,
+                    x=x,
+                    y=y,
+                    orientation=orientation,
+                    tasks=tasks
+                ))
+
+            logger.info(f"Loaded {len(self.locations)} locations for {'blue' if self.is_blue_team else 'yellow'} team")
+        except Exception as e:
+            logger.error(f"Error loading mission file {mission_file}: {str(e)}. Using default values.")
+            # Add default/fallback locations if file has issues
             self.add_location(Location("Test", 100, 0, 0))
             self.add_location(Location("Test 2", 200, 0, 0))
 
-            # self.add_location(Location("BlueStart", 30, 30, 0))
-            # self.add_location(Location("BlueActionPoint1", 50, 70, 90, [
-            #     Task("GrabBlueItem", "GRAB", {"S": 1}, 3)
-            # ]))
-            # self.add_location(Location("BlueActionPoint2", 90, 80, 180, [
-            #     Task("DropBlueItem", "DROP", {"S": 1}, 2)
-            # ]))
-            # # Add more blue team locations as needed
-            # self.add_location(Location("BlueEndZone", 180, 30, 270))
-        else:
-            # Yellow team mission waypoints
-            self.add_location(Location("Test", 100, 0, 0))
-            self.add_location(Location("Test 2", 200, 0, 0))
+    def _process_action_sequence(self, sequence, task_templates, movement_templates, variables, params_override):
+        """
+        Converts an action sequence into a list of Task objects.
 
-            # self.add_location(Location("YellowStart", 270, 30, 180))
-            # self.add_location(Location("YellowActionPoint1", 250, 70, 90, [
-            #     Task("GrabYellowItem", "GRAB", {"S": 2}, 3)
-            # ]))
-            # self.add_location(Location("YellowActionPoint2", 210, 80, 0, [
-            #     Task("DropYellowItem", "DROP", {"S": 2}, 2)
-            # ]))
-            # # Add more yellow team locations as needed
-            # self.add_location(Location("YellowEndZone", 120, 30, 270))
+        :param sequence: Action sequence definition from JSON
+        :param task_templates: Dictionary of task templates
+        :param movement_templates: Dictionary of movement templates
+        :param variables: Dictionary of configuration variables
+        :param params_override: Optional parameter overrides specified in location
+        :return: List of Task objects
+        """
+        tasks = []
+        for i, step in enumerate(sequence.get("steps", [])):
+            step_type = step.get("type")
+            template_name = step.get("template")
 
-        logger.info(f"Loaded {len(self.locations)} locations for {'blue' if self.is_blue_team else 'yellow'} team")
+            if step_type == "task" and template_name in task_templates:
+                # Process task step
+                template = task_templates[template_name]
+
+                # Apply parameter overrides if present
+                task_params = template.get("params", {}).copy()
+                if template_name in params_override:
+                    if "params" in params_override[template_name]:
+                        task_params.update(params_override[template_name]["params"])
+
+                # Resolve variables in parameters
+                task_params = self._resolve_variables(task_params, variables)
+
+                # Create task with resolved parameters
+                tasks.append(Task(
+                    name=f"{template_name}_{i}",
+                    command=template["command"],
+                    params=task_params,
+                    completion_time=self._resolve_variables(template.get("completion_time", 5), variables)
+                ))
+
+            elif step_type == "movement" and template_name in movement_templates:
+                # Process movement step
+                movement_steps = movement_templates[template_name]
+
+                # Apply parameter overrides if present
+                if template_name in params_override:
+                    overrides = params_override[template_name]
+                    for j, override in enumerate(overrides):
+                        if j < len(movement_steps):
+                            if "params" in override and "params" in movement_steps[j]:
+                                movement_steps[j]["params"].update(override["params"])
+
+                # Convert movement steps to tasks
+                for j, movement in enumerate(movement_steps):
+                    mv_params = movement.get("params", {}).copy()
+
+                    # Resolve variables in movement parameters
+                    mv_params = self._resolve_variables(mv_params, variables)
+
+                    tasks.append(Task(
+                        name=f"{template_name}_{i}_{j}",
+                        command=movement["command"],
+                        params=mv_params,
+                        completion_time=self._resolve_variables(movement.get("completion_time", 2), variables)
+                    ))
+
+        return tasks
+
+    def _process_tasks(self, tasks_data, task_templates, variables):
+        """
+        Process individual task definitions into Task objects.
+
+        :param tasks_data: List of task definitions from JSON
+        :param task_templates: Dictionary of task templates
+        :param variables: Dictionary of configuration variables
+        :return: List of Task objects
+        """
+        tasks = []
+        for task_data in tasks_data:
+            if "template" in task_data and task_data["template"] in task_templates:
+                # Task uses a template
+                template = task_templates[task_data["template"]]
+                task_name = task_data["name"]
+                task_command = template["command"]
+
+                # Handle params with both template and overrides
+                task_params = template.get("params", {}).copy()
+                if "params_override" in task_data:
+                    task_params.update(task_data["params_override"])
+
+                # Resolve variables in params - use the enhanced resolver
+                task_params = self._resolve_variables(task_params, variables)
+
+                completion_time = task_data.get("completion_time",
+                                                self._resolve_variables(template.get("completion_time", 5),
+                                                                        variables))
+            else:
+                # Regular task definition without template
+                task_name = task_data["name"]
+                task_command = task_data["command"]
+                task_params = task_data.get("params", {})
+                completion_time = task_data.get("completion_time", 5)
+
+                # Resolve variables in params
+                task_params = self._resolve_variables(task_params, variables)
+
+            tasks.append(Task(
+                name=task_name,
+                command=task_command,
+                params=task_params,
+                completion_time=completion_time
+            ))
+
+        return tasks
+
+    def _resolve_variables(self, value, variables):
+        """
+        Recursively resolve all variables in a value, supporting various data structures
+        and formats including variables in keys and compound strings.
+
+        :param value: The value to process (can be dict, list, string, or primitive)
+        :param variables: Dictionary of available variables
+        :return: The value with all variables resolved
+        """
+        # Base case: None
+        if value is None:
+            return None
+
+        # Handle dictionaries (including variable keys)
+        if isinstance(value, dict):
+            result = {}
+            for k, v in value.items():
+                # Resolve key if it's a variable
+                resolved_key = k
+                if isinstance(k, str) and k.startswith('$'):
+                    var_name = k[1:]
+                    if var_name in variables:
+                        resolved_key = variables[var_name]
+
+                # Recursively resolve the value
+                resolved_value = self._resolve_variables(v, variables)
+                result[resolved_key] = resolved_value
+            return result
+
+        # Handle lists
+        if isinstance(value, list):
+            return [self._resolve_variables(item, variables) for item in value]
+
+        # Handle strings with embedded variables
+        if isinstance(value, str):
+            # Simple variable replacement (entire string is a variable)
+            if value.startswith('$') and not ':' in value:
+                var_name = value[1:]
+                if var_name in variables:
+                    return variables[var_name]
+                return value
+
+            # Complex string with embedded variables
+            if '$' in value:
+                result = value
+                # Find all variable references
+                import re
+                var_refs = re.findall(r'\$([a-zA-Z0-9_]+)', value)
+
+                # Replace each variable reference
+                for var_name in var_refs:
+                    if var_name in variables:
+                        # Replace variable with its value, converting to string if needed
+                        var_value = str(variables[var_name])
+                        result = result.replace(f'${var_name}', var_value)
+
+                return result
+
+        # Return primitive values as is
+        return value
 
     def handle_idle_state(self):
         """
@@ -644,7 +832,8 @@ class RobotBrain(threading.Thread):
             self.send_movement_command(f"GX{waypoint_x:.2f}Y{waypoint_y:.2f}Z{new_heading_deg:.2f}")
 
             # Display the current position
-            self.send_lcd_message(f"Team {'Blue' if self.is_blue_team else 'Yellow'}", "X: {:.2f} Y: {:.2f}".format(current_x, current_y))
+            self.send_lcd_message(f"Team {'Blue' if self.is_blue_team else 'Yellow'}",
+                                  "X: {:.2f} Y: {:.2f}".format(current_x, current_y))
 
             # Log navigation status
             if self.obstacles:
@@ -666,7 +855,8 @@ class RobotBrain(threading.Thread):
                 # Update last sent position
                 self.last_sent_position = (current_location.x, current_location.y)
 
-            self.send_movement_command(f"GX{current_location.x/100:.2f}Y{current_location.y/100:.2f}Z{current_z/100:.2f}")
+            self.send_movement_command(
+                f"GX{current_location.x / 100:.2f}Y{current_location.y / 100:.2f}Z{current_z / 100:.2f}")
 
             logger.info(f"Directly navigating to {current_location.name}, distance: {distance:.2f}")
 
@@ -730,7 +920,8 @@ class RobotBrain(threading.Thread):
             return
 
         # Continue navigating to end zone
-        self.send_movement_command(f"GX{end_location.x/100:.2f}Y{end_location.y/100:.2f}Z{end_location.orientation/100:.2f}")
+        self.send_movement_command(
+            f"GX{end_location.x / 100:.2f}Y{end_location.y / 100:.2f}Z{end_location.orientation / 100:.2f}")
         logger.info(f"Returning to end zone, distance: {distance:.2f}")
 
         # Check if we're about to run out of time
