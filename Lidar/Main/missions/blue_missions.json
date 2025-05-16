@@ -1,5 +1,6 @@
 {
   "variables": {
+    
     "x_c": 0,
     "y_c": 0,
     "z_c": 0,
@@ -173,6 +174,55 @@
       "name": "BlueStart",
       "x": 177.5,
       "y": 5.0,
+      "orientation": 90,
+      "tasks": []
+    },
+     {
+      "name": " Check 2",
+      "x": 190.0,
+      "y": 80.0,
+      "orientation": 90,
+      "tasks": []
+    },
+     {
+      "name": " Check 3",
+      "x": 177.5,
+      "y": 40.0,
+      "orientation": -90,
+      "tasks": []
+    },
+    {
+      "name": " Check 4",
+      "x": 222.5,
+      "y": 40.0,
+      "orientation": -90,
+      "tasks": []
+    },
+    {
+      "name": " Check 5",
+      "x": 177.5,
+      "y": 40.0,
+      "orientation": -90,
+      "tasks": []
+    },
+    {
+      "name": " Check 6",
+      "x":  280.0,
+      "y": 40.0,
+      "orientation": 90,
+      "tasks": []
+    },
+    {
+      "name": " Check 7",
+      "x": 177.5,
+      "y": 40.0,
+      "orientation": -90,
+      "tasks": []
+    },
+    {
+      "name": " Check 8",
+      "x": 262.5,
+      "y": 180.0,
       "orientation": 90,
       "tasks": []
     },
