@@ -35,9 +35,15 @@ class RobotInterface(threading.Thread):
     :type position_received: threading.Event
     :ivar buffer: Temporary storage for data received from the robot for line-based processing.
     :type buffer: str
+    :ivar interface_type: Type of interface - either "movement" or "action".
+    :type interface_type: str
+    :ivar ultrasonic_data: Dictionary storing the latest readings from ultrasonic sensors.
+    :type ultrasonic_data: dict
+    :ivar us_data_received: Event object triggered when ultrasonic sensor data is received.
+    :type us_data_received: threading.Event
     """
 
-    def __init__(self, serial_port='/dev/ttyACM0', baud_rate=115200, stop_event=None):
+    def __init__(self, serial_port='/dev/ttyACM0', baud_rate=115200, stop_event=None, interface_type="movement"):
         super().__init__()
         self.serial_port = serial_port
         self.baud_rate = baud_rate
@@ -46,7 +52,10 @@ class RobotInterface(threading.Thread):
         self.ser = None
         self.connected = False
         self.position_received = threading.Event()
+        self.us_data_received = threading.Event()
         self.buffer = ""
+        self.interface_type = interface_type  # "movement" or "action"
+        self.ultrasonic_data = {}  # Store ultrasonic sensor data {sensor_id: distance}
 
     def run(self):
         retry_count = 0
@@ -58,22 +67,21 @@ class RobotInterface(threading.Thread):
                 self.ser = serial.Serial(self.serial_port, self.baud_rate, timeout=1)
                 time.sleep(2)  # Waiting for the serial port to open
 
-                # FIXME: Adapt fot movement and action
                 if self.ser.is_open:
                     logger.info(f"{self.serial_port} connected!")
                     self.ser.reset_input_buffer()
-                    logger.info(
-                        "Asking for initial position...")  # TODO: Don't ask for position at startup (add team and set command)
-                    self.ser.write("P\n".encode())
+
+                    # Initialize based on interface type
+                    if self.interface_type == "movement":
+                        logger.info("Movement interface initialized.")
+                    elif self.interface_type == "action":
+                        logger.info("Action interface initialized.")
+
                     self.connected = True
                     retry_count = 0
 
                     logger.info("Starting to read data from Arduino...")
                     while not self.stop_event.is_set():
-                        # TODO: Remove ?
-                        # if time.time() % 1 < 0.01:  # Environ une fois par seconde
-                        #     self.ser.write(b"P\n")
-
                         # Read all available data
                         if self.ser.in_waiting > 0:
                             raw_data = self.ser.read(self.ser.in_waiting)
@@ -86,13 +94,13 @@ class RobotInterface(threading.Thread):
                                     line, self.buffer = self.buffer.split('\n', 1)
                                     line = line.strip()
                                     if line:  # Ignore empty lines
-                                        logger.debug(f"Reçu: {line}")
+                                        logger.debug(f"Received: {line}")
                                         self.process_line(line)
                             except UnicodeDecodeError:
                                 logger.warning("Invalid data received, emptying buffer")
                                 self.buffer = ""
 
-                        time.sleep(0.001) # Waiting 1 ms
+                        time.sleep(0.001)  # Waiting 1 ms
 
             except serial.SerialException as e:
                 logger.error(f"Serial error: {e}")
@@ -105,22 +113,21 @@ class RobotInterface(threading.Thread):
                 break
 
             finally:
-                # if self.ser and self.ser.is_open and not self.stop_event.is_set():
-                #     try:
-                #         self.ser.close()
-                #         logger.info("Serial port closed")
-                #     except Exception as e:
-                #         logger.error(f"Error closing the serial port: {e}")
-                #
-                # self.connected = False
+                if self.ser and self.ser.is_open:
+                    try:
+                        self.ser.close()
+                        logger.info("Serial port closed")
+                    except Exception as e:
+                        logger.error(f"Error closing the serial port: {e}")
                 logger.warning("Robot disconnected")
 
         if retry_count >= max_retries:
-            logger.error(f"Échec de connexion après {max_retries} tentatives")
+            logger.error(f"Connection failed after {max_retries} attempts")
 
     def process_line(self, line):
         """Process a line received from the Arduino"""
         try:
+            # Process position data (movement interface)
             if "POS" in line:
                 self.position_received.set()
 
@@ -141,24 +148,22 @@ class RobotInterface(threading.Thread):
                     if not z_match: missing.append("Z")
                     logger.warning(f"Incomplete position data: {missing} missing in: {line}")
 
-            elif line.startswith("Target"): # FIXME: Do not exist in Arduino code
-                # Extract target information if provided
-                target_x_match = re.search(r'X:(\d+\.?\d*)', line)
-                target_y_match = re.search(r'Y:(\d+\.?\d*)', line)
+            # Process ultrasonic sensor data (action interface)
+            elif "US" in line:
+                self.us_data_received.set()
+                # Parse format US<id>:<dis>;<id>:<dis>
+                us_data = re.findall(r'(\d+):(\d+\.?\d*)', line)
 
-                if target_x_match and target_y_match:
-                    target_x = float(target_x_match.group(1))
-                    target_y = float(target_y_match.group(1))
-                    position_manager.set_target(target_x, target_y)
-                    logger.info(f"Updated target: X={target_x}, Y={target_y}")
+                if us_data:
+                    # Clear existing data before updating
+                    self.ultrasonic_data.clear()
 
-            elif line.startswith("Velocity"): # FIXME: Do not exist in Arduino code
-                # Extract velocity information
-                vel_match = re.search(r'to: (\d+)', line)
-                if vel_match:
-                    velocity = int(vel_match.group(1))
-                    position_manager.set_velocity(velocity)
-                    logger.info(f"Updated velocity: {velocity}")
+                    for sensor_id, distance in us_data:
+                        self.ultrasonic_data[int(sensor_id)] = float(distance)
+
+                    logger.debug(f"Ultrasonic data updated: {self.ultrasonic_data}")
+                else:
+                    logger.warning(f"Invalid ultrasonic data format: {line}")
 
             elif "unknown command" in line.lower():
                 logger.warning(f"Arduino reported unknown command: {line}")
@@ -170,26 +175,34 @@ class RobotInterface(threading.Thread):
             logger.error(f"Error when processing line: {e}, line: {line}")
 
     def send_command(self, command):
-        """Send a movement command to the Arduino"""
+        """
+        Send a command to the Arduino without waiting for a response.
+        The interface will continuously listen for data in its main loop.
+        """
         if self.connected:
             try:
                 if self.ser.is_open:
                     logger.info(f"Send command: {command}")
                     self.ser.write(f"{command}\n".encode())
-
-                    # Wait for Arduino to respond
-                    timeout_counter = 0
-                    while self.ser.in_waiting == 0 and timeout_counter < 50:
-                        time.sleep(0.01)
-                        timeout_counter += 1
-
-                    if self.ser.in_waiting > 0:
-                        answer = self.ser.readline()
-                        logger.info(f"Response: {answer}")
-                        self.ser.reset_input_buffer()
                 else:
                     logger.warning("The serial port is not open, cannot send command")
             except serial.SerialException as e:
                 logger.error(f"Error sending command: {e}")
         else:
             logger.warning("Not connected to the Arduino, cannot send command")
+
+    def get_ultrasonic_data(self):
+        """
+        Get the latest ultrasonic sensor readings
+
+        :return: Dictionary of sensor readings {sensor_id: distance}
+        :rtype: dict
+        """
+        return self.ultrasonic_data.copy()  # Return a copy to avoid thread issues
+
+    def request_sensor_data(self):
+        """Request ultrasonic sensor data from Arduino (action interface)"""
+        if self.interface_type == "action" and self.connected:
+            self.send_command("R")  # Assuming 'R' is the command to request sensor data
+        else:
+            logger.warning("Cannot request sensor data: interface type is not 'action' or not connected")

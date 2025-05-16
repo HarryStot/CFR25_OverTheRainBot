@@ -384,6 +384,11 @@ class RobotBrain(threading.Thread):
             team = Team.BLUE if self.is_blue_team else Team.YELLOW
             position_manager.set_team(team)
 
+            # Send the initial position to the robot
+            initial_pos = position_manager.get_position()
+            logger.info(f"Initial position set to: {initial_pos}")
+            self.movement_interface.send_command(f"INITX{initial_pos[0]}Y{initial_pos[1]}Z{initial_pos[2]}")
+
             # Update LCD to show team is confirmed
             self.send_lcd_message(f"{team_name}", "CONFIRMED!")
             time.sleep(1)  # Show confirmation briefly
