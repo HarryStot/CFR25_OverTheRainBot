@@ -35,7 +35,8 @@
     "a_i3": 0,
     "a_i4": 0,
     "v_i": 0,
-    "default_time": -1
+    "default_time": -1,
+    "precision_movement_speed" : 75
   },
 
   "task_templates": {

@@ -110,7 +110,7 @@ class Location:
         self.tasks = tasks or []
 
     def __str__(self):
-        return f"Location: {self.name} at ({self.x}, {self.y})"
+        return f"Location: {self.name} at ({self.x}, {self.y}, {self.orientation})"
 
 
 class RobotBrain(threading.Thread):
@@ -175,11 +175,11 @@ class RobotBrain(threading.Thread):
     :type task_timeout: int
     :ivar lock: Reentrant lock for thread-safe operations.
     :type lock: threading.RLock
-    :ivar team_select_pin: GPIO pin number configured for team selection.
+    :ivar team_select_pin: GPIO pin configured for team selection.
     :type team_select_pin: int
-    :ivar validation_pin: GPIO pin number configured for the validation button.
+    :ivar validation_pin: GPIO pin configured for the validation button.
     :type validation_pin: int
-    :ivar pull_switch_pin: GPIO pin number configured for the mission start switch.
+    :ivar pull_switch_pin: GPIO pin configured for the mission start switch.
     :type pull_switch_pin: int
     :ivar potential_nav: Instance for handling potential field navigation.
     :type potential_nav: PotentialFieldNavigation
@@ -211,6 +211,7 @@ class RobotBrain(threading.Thread):
         # Last position sent to the robot
         self.last_sent_position = None  # Last position sent to the robot
         self.last_sent_orientation = None  # Last orientation sent to the robot
+        self.last_sent_position_time = 0  # Last time the position was sent
 
         # Team and timing variables
         self.is_blue_team = None  # True for blue team, False for yellow team
@@ -224,11 +225,12 @@ class RobotBrain(threading.Thread):
         self.current_task_index = -1
 
         # Navigation parameters
-        self.position_tolerance = 4  # [cm]
-        self.orientation_tolerance = 1.5  # [degrees]
+        self.position_tolerance = 5  # [cm]
+        self.orientation_tolerance = 5  # [degrees]
         self.obstacle_detected = False
         self.navigation_timeout = 60  # [seconds]
         self.navigation_start_time = 0
+        self.send_retry_after = 0.5  # [seconds] - time to wait before resending the command
 
         # Task execution variables
         self.task_start_time = 0
@@ -523,8 +525,8 @@ class RobotBrain(threading.Thread):
         except Exception as e:
             logger.error(f"Error loading mission file {mission_file}: {str(e)}. Using default values.")
             # Add default/fallback locations if file has issues
-            self.add_location(Location("Test", 100, 0, 0))
-            self.add_location(Location("Test 2", 200, 0, 0))
+            self.add_location(Location("Test", 100, 0, -90))
+            self.add_location(Location("Test 2", 100, -100, -90))
 
     def _process_action_sequence(self, sequence, task_templates, movement_templates, variables, params_override):
         """
@@ -766,7 +768,7 @@ class RobotBrain(threading.Thread):
         # Get current position
         current_x, current_y, current_z = position_manager.get_position()
         current_pos = (current_x, current_y)
-        target_pos = (current_location.x, current_location.y)
+        target_pos = (current_location.x, current_location.y, current_location.orientation)
 
         # Calculate distance to target
         distance = ((current_x - current_location.x) ** 2 +
@@ -779,13 +781,17 @@ class RobotBrain(threading.Thread):
                 orientation_diff = abs(current_z - current_location.orientation) % 360
                 orientation_diff = min(orientation_diff, 360 - orientation_diff)
 
-                # if orientation_diff > self.orientation_tolerance:
-                #     # Need to adjust orientation
-                #               #
-                #     self.send_movement_command(
-                #         f"GX{current_location.x/100:.2f}Y{current_location.y/100:.2f}Z{current_location.orientation/100:.2f}")
-                #     logger.info(f"Adjusting orientation to {current_location.orientation} degrees")
-                #     return
+                if orientation_diff > self.orientation_tolerance:
+                    # Need to adjust orientation
+                    if self.last_sent_orientation != current_location.orientation:
+                        self.last_sent_orientation = current_location.orientation
+                        # Send movement command to adjust orientation
+                        self.send_movement_command(
+                            f"GX{current_location.x / 100:.2f}Y{current_location.y / 100:.2f}Z{(current_location.orientation + orientation_diff * 1.5) * np.pi / 180:.2f}")
+                        logger.debug(f"Adjusting orientation to {current_location.orientation} degrees")
+                    else:
+                        logger.info("Already sent last orientation, skipping movement command")
+                    return
 
             logger.info(f"Reached location: {current_location.name}")
             self.send_movement_command("S")  # Stop the robot
@@ -851,7 +857,8 @@ class RobotBrain(threading.Thread):
             # Simple direct navigation without potential field
 
             # Check if we already sent the last position
-            if self.last_sent_position == (current_location.x, current_location.y):
+            if self.last_sent_position == (current_location.x,
+                                           current_location.y) and time.time() - self.last_sent_position_time < self.send_retry_after:
                 logger.debug("Already sent last position, skipping movement command")
                 self.send_lcd_message(f"Team {'Blue' if self.is_blue_team else 'Yellow'}",
                                       "X: {:.2f} Y: {:.2f}".format(current_x, current_y))
@@ -859,9 +866,10 @@ class RobotBrain(threading.Thread):
             else:
                 # Update last sent position
                 self.last_sent_position = (current_location.x, current_location.y)
+                self.last_sent_position_time = time.time()
 
             self.send_movement_command(
-                f"GX{current_location.x / 100:.2f}Y{current_location.y / 100:.2f}Z{current_z / 100:.2f}")
+                f"GX{current_location.x / 100:.2f}Y{current_location.y / 100:.2f}Z{(current_location.orientation * np.pi / 180):.2f}")
 
             logger.info(f"Directly navigating to {current_location.name}, distance: {distance:.2f}")
 
@@ -902,7 +910,7 @@ class RobotBrain(threading.Thread):
             else:
                 # All tasks complete, go back to IDLE
                 logger.info(f"All tasks completed at location: {current_location.name}")
-                self.set_state(RobotState.IDLE)  # FIXME: Change to NAVIGATING?
+                self.set_state(RobotState.IDLE)
         else:
             # Task still in progress
             time.sleep(0.1)
@@ -1029,7 +1037,7 @@ class RobotBrain(threading.Thread):
 
                 full_command = f"{command}{params_str}"
                 self.action_interface.send_command(full_command)
-                logger.info(f"Sent action command: {command}{params_str}")
+                # logger.info(f"Sent action command: {command}{params_str}")
             except Exception as e:
                 logger.error(f"Error sending action command: {e}")
                 # self.set_state(RobotState.ERROR)
@@ -1078,7 +1086,7 @@ class RobotBrain(threading.Thread):
         self.last_lcd_line2 = line2
         # Use the action command method to send LCD commands
         self.send_action_command("LCD", params)
-        logger.debug(f"Sent to LCD - Line 1: '{line1}', Line 2: '{line2}'")
+        # logger.debug(f"Sent to LCD - Line 1: '{line1}', Line 2: '{line2}'")
 
     def run(self):
         """Main brain thread function"""
