@@ -12,10 +12,10 @@ int MODE_servo = 0;
 #define NB_CAPTEUR 3
 #define MAX_DISTANCE 45
 
-#define ECHO_PIN_1 8
-#define TRIG_PIN_1 9
-#define ECHO_PIN_2 10
-#define TRIG_PIN_2 11
+#define ECHO_PIN_1 10
+#define TRIG_PIN_1 11
+#define ECHO_PIN_2 8
+#define TRIG_PIN_2 9
 #define ECHO_PIN_3 12
 #define TRIG_PIN_3 13
 
