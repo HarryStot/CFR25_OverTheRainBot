@@ -10,9 +10,13 @@ import RPi.GPIO as GPIO
 import numpy as np
 
 from avoidance_system import PotentialFieldNavigation
+from main import debug
 from position_manager import position_manager
 
 logger = logging.getLogger(__name__)
+
+if debug:
+    logger.setLevel(logging.DEBUG)
 
 
 class RobotState(Enum):
@@ -234,7 +238,7 @@ class RobotBrain(threading.Thread):
 
         # Task execution variables
         self.task_start_time = 0
-        self.task_timeout = 20  # [seconds]
+        self.task_timeout = 10  # [seconds]
 
         # Lock for thread safety
         self.lock = threading.RLock()
@@ -471,7 +475,7 @@ class RobotBrain(threading.Thread):
 
         # Determine which file to load based on team
         mission_file = "blue_missions.json" if self.is_blue_team else "yellow_missions.json"
-        file_path = os.path.join(os.path.dirname(__file__), mission_file)
+        file_path = os.path.join(os.path.dirname(__file__), "missions", mission_file)
 
         try:
             with open(file_path, 'r') as f:
@@ -676,30 +680,28 @@ class RobotBrain(threading.Thread):
         # Handle strings with embedded variables
         if isinstance(value, str):
             # Simple variable replacement (entire string is a variable)
-            if value.startswith('$') and not ':' in value:
+            if value.startswith('$') and ':' not in value:
                 var_name = value[1:]
-                if var_name in variables:
-                    return variables[var_name]
-                return value
-
+                return variables.get(var_name, value)
+                
             # Complex string with embedded variables
             if '$' in value:
-                result = value
-                # Find all variable references
                 import re
+                result = value
                 var_refs = re.findall(r'\$([a-zA-Z0-9_]+)', value)
-
+                
                 # Replace each variable reference
                 for var_name in var_refs:
                     if var_name in variables:
-                        # Replace variable with its value, converting to string if needed
                         var_value = str(variables[var_name])
+                        # Replace variable with its value, converting to string if needed
                         result = result.replace(f'${var_name}', var_value)
-
                 return result
-
+                
         # Return primitive values as is
         return value
+
+        # Return primitive values as is
 
     def handle_idle_state(self):
         """
@@ -728,150 +730,105 @@ class RobotBrain(threading.Thread):
 
     def handle_navigating_state(self):
         """
-        Handles navigation logic for the robot while it is in the navigating state.
-
-        This method determines the appropriate navigation actions based on the robot's
-        current location, mission time constraints, and obstacle detection status. It
-        also calculates the distance to the target, evaluates the required orientation
-        corrections, and sends movement commands accordingly. The method makes use of
-        potential field navigation for obstacle avoidance if enabled, and supports
-        direct navigation otherwise. Additionally, state transitions occur based on
-        defined criteria such as reaching a target, running out of time, or encountering
-        obstacles.
-
-        :raises ValueError: If any unexpected state or condition is encountered
-                            during navigation.
+        Handles navigation to the current location, using potential field navigation if enabled.
+        If avoidance_enabled is True, the robot will move through dynamically generated waypoints
+        (goals) computed by the potential field system, instead of going directly to the final goal.
+        Each segment is a straight line, and a new goal is sent only when the previous one is reached.
+        Logs and comments are in English.
         """
         current_location = self.locations[self.current_location_index]
-
-        # Check if we need to return to end zone based on time
         elapsed_time = time.time() - self.mission_start_time
         remaining_time = self.mission_duration - elapsed_time
-
         if remaining_time <= self.end_zone_time:
             logger.warning(f"Only {remaining_time:.1f} seconds remaining! Heading to end zone.")
-            # self.set_state(RobotState.RETURNING_TO_END)
+            # TODO: Implement end zone navigation
             return
 
-        # Check if navigation timed out
-        # if time.time() - self.navigation_start_time > self.navigation_timeout:
-        #     logger.warning(f"Navigation to {current_location.name} timed out")
-        #     self.set_state(RobotState.ERROR)
-        #     return
+        # Internal state for navigation phase
+        if not hasattr(self, '_nav_phase'):
+            self._nav_phase = 'start'  # 'start', 'navigating', 'waiting_nav', 'waiting_orient', 'done'
+            self._last_goal = None
+            self._goal_reached = False
 
-        # Check if obstacle detected
-        if self.obstacle_detected:
-            logger.warning("Obstacle detected during navigation")
-            # We'll continue with potential field navigation instead of going to ERROR state
-            # because the potential field should handle obstacle avoidance
+        # PHASE 1: Start navigation
+        if self._nav_phase == 'start':
+            self.movement_interface.navigation_stopped.clear()
+            self.movement_interface.orientation_stopped.clear()
+            self._nav_phase = 'navigating'
+            self._last_goal = None
+            self._goal_reached = False
+            logger.info(f"Starting navigation to {current_location.name}")
+            return
 
-        # Get current position
-        current_x, current_y, current_z = position_manager.get_position()
-        current_pos = (current_x, current_y)
-        target_pos = (current_location.x, current_location.y, current_location.orientation)
+        # PHASE 2: Dynamic waypoint navigation
+        if self._nav_phase == 'navigating':
+            current_x, current_y, current_z = position_manager.get_position()
+            robot_pos = (current_x, current_y)
+            target_pos = (current_location.x, current_location.y)
+            distance_to_target = ((current_x - current_location.x) ** 2 + (current_y - current_location.y) ** 2) ** 0.5
+            waypoint_distance = 30  # [cm] Distance for each sub-goal (can be tuned)
+            goal_tolerance = 5  # [cm] Tolerance to consider a goal reached
 
-        # Calculate distance to target
-        distance = ((current_x - current_location.x) ** 2 +
-                    (current_y - current_location.y) ** 2) ** 0.5
+            if self.avoidance_enabled:
+                # Use potential field to compute the next waypoint
+                robot_heading_rad = np.radians(current_z)
+                v, omega = self.potential_nav.compute_control(
+                    robot_pos=robot_pos,
+                    robot_heading=robot_heading_rad,
+                    target_pos=target_pos,
+                    obstacles=self.obstacles
+                )
+                # Compute the next waypoint at a fixed distance in the direction of the force
+                direction = np.array([np.cos(robot_heading_rad), np.sin(robot_heading_rad)])
+                if np.linalg.norm([v, omega]) > 0:
+                    # Use the direction of the force vector
+                    force_angle = np.arctan2(v * np.sin(robot_heading_rad) + omega, v * np.cos(robot_heading_rad))
+                    direction = np.array([np.cos(force_angle), np.sin(force_angle)])
+                next_goal = np.array(robot_pos) + direction * min(waypoint_distance, distance_to_target)
+                next_goal = next_goal.tolist()
+                # If close to the final target, set the goal to the target
+                if distance_to_target < waypoint_distance:
+                    next_goal = [current_location.x, current_location.y]
+                # Only send a new goal if the previous one is reached or not set
+                if (self._last_goal is None or
+                        ((current_x - self._last_goal[0]) ** 2 + (
+                                current_y - self._last_goal[1]) ** 2) ** 0.5 < goal_tolerance):
+                    self._last_goal = next_goal
+                    logger.info(f"Sending new dynamic goal: X={next_goal[0]:.1f} Y={next_goal[1]:.1f}")
+                    self.send_movement_command(
+                        f"GX{next_goal[0] / 100:.2f}Y{next_goal[1] / 100:.2f}Z{(current_location.orientation if current_location.orientation is not None else 0) * np.pi / 180:.2f}")
+                    # Wait for Arduino to reach this goal (STOP_NAVIGATION)
+                    self._nav_phase = 'waiting_nav'
+                else:
+                    self._nav_phase = 'done'
+            else:
+                logger.info(f"Direct navigation to {current_location.name}")
+                self.send_movement_command(
+                    f"GX{current_location.x / 100:.2f}Y{current_location.y / 100:.2f}Z{(current_location.orientation if current_location.orientation is not None else 0) * np.pi / 180:.2f}")
+                self._nav_phase = 'waiting_nav'
+            return
 
-        # Check if we're at the target location
-        if distance <= self.position_tolerance:
-            # Check orientation if specified
-            if current_location.orientation is not None:
-                orientation_diff = abs(current_z - current_location.orientation) % 360
-                orientation_diff = min(orientation_diff, 360 - orientation_diff)
+        # PHASE 3 : Attente de STOP_ORIENTATION
+        if self._nav_phase == 'waiting_orient':
+            if self.movement_interface.orientation_stopped.is_set():
+                logger.info("Received STOP_ORIENTATION, orientation completed")
+                self._nav_phase = 'done'
+            else:
+                time.sleep(0.01)
+            return
 
-                if orientation_diff > self.orientation_tolerance:
-                    # Need to adjust orientation
-                    if self.last_sent_orientation != current_location.orientation:
-                        self.last_sent_orientation = current_location.orientation
-                        # Send movement command to adjust orientation
-                        self.send_movement_command(
-                            f"GX{current_location.x / 100:.2f}Y{current_location.y / 100:.2f}Z{(current_location.orientation + orientation_diff * 1.5) * np.pi / 180:.2f}")
-                        logger.debug(f"Adjusting orientation to {current_location.orientation} degrees")
-                    else:
-                        logger.info("Already sent last orientation, skipping movement command")
-                    return
-
-            logger.info(f"Reached location: {current_location.name}")
-            self.send_movement_command("S")  # Stop the robot
-            # If there are tasks to perform, move to EXECUTING_TASK state
+        # PHASE 4 : Passage à la tâche suivante
+        if self._nav_phase == 'done':
+            logger.info(f"Navigation and orientation completed for {current_location.name}")
             if current_location.tasks:
                 self.current_task_index = 0
                 self.set_state(RobotState.EXECUTING_TASK)
                 self.task_start_time = time.time()
             else:
                 self.set_state(RobotState.IDLE)
-        elif self.avoidance_enabled:
-
-            # Navigation using potential field
-            # Convert orientation to radians for potential field calculation
-            robot_heading_rad = np.radians(current_z)
-
-            # Compute control commands using potential field
-            v, omega = self.potential_nav.compute_control(
-                robot_pos=current_pos,
-                robot_heading=robot_heading_rad,
-                target_pos=target_pos,
-                obstacles=self.obstacles
-            )
-
-            # Save last computed control values for debugging
-            self.last_v = v
-            self.last_omega = omega
-
-            # Calculate next waypoint based on potential field
-            # Use a shorter look-ahead distance when obstacles are nearby
-            if self.obstacles:
-                look_ahead_distance = min(distance * 0.5, 5.0)  # Half of distance to target, max 5 units
-            else:
-                look_ahead_distance = min(distance * 0.7, 10.0)  # Longer look-ahead when no obstacles
-
-            # Convert omega (angular velocity) to a heading change
-            # Small delta_t for prediction
-            delta_t = 0.1
-            new_heading_rad = robot_heading_rad + omega * delta_t
-
-            # Calculate waypoint coordinates
-            waypoint_x = current_x + v * np.cos(new_heading_rad) * delta_t * look_ahead_distance
-            waypoint_y = current_y + v * np.sin(new_heading_rad) * delta_t * look_ahead_distance
-
-            # Convert heading back to degrees
-            new_heading_deg = np.degrees(new_heading_rad) % 360
-
-            # Send movement command to robot
-            self.send_movement_command(f"GX{waypoint_x:.2f}Y{waypoint_y:.2f}Z{new_heading_deg:.2f}")
-
-            # Display the current position
-            self.send_lcd_message(f"Team {'Blue' if self.is_blue_team else 'Yellow'}",
-                                  "X: {:.2f} Y: {:.2f}".format(current_x, current_y))
-
-            # Log navigation status
-            if self.obstacles:
-                logger.info(
-                    f"Navigating to {current_location.name} with {len(self.obstacles)} obstacles, distance: {distance:.2f}")
-            else:
-                logger.info(f"Navigating to {current_location.name}, distance: {distance:.2f}")
-
-        elif not self.avoidance_enabled:
-            # Simple direct navigation without potential field
-
-            # Check if we already sent the last position
-            if self.last_sent_position == (current_location.x,
-                                           current_location.y) and time.time() - self.last_sent_position_time < self.send_retry_after:
-                logger.debug("Already sent last position, skipping movement command")
-                self.send_lcd_message(f"Team {'Blue' if self.is_blue_team else 'Yellow'}",
-                                      "X: {:.2f} Y: {:.2f}".format(current_x, current_y))
-                return
-            else:
-                # Update last sent position
-                self.last_sent_position = (current_location.x, current_location.y)
-                self.last_sent_position_time = time.time()
-
-            self.send_movement_command(
-                f"GX{current_location.x / 100:.2f}Y{current_location.y / 100:.2f}Z{(current_location.orientation * np.pi / 180):.2f}")
-
-            logger.info(f"Directly navigating to {current_location.name}, distance: {distance:.2f}")
+            # Réinitialise l'état interne pour la prochaine navigation
+            del self._nav_phase
+            return
 
     def handle_executing_task_state(self):
         """Handle the EXECUTING_TASK state"""

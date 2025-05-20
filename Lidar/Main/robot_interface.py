@@ -56,6 +56,9 @@ class RobotInterface(threading.Thread):
         self.buffer = ""
         self.interface_type = interface_type  # "movement" or "action"
         self.ultrasonic_data = {}  # Store ultrasonic sensor data {sensor_id: distance}
+        # Nouveaux événements pour la navigation et l'orientation
+        self.navigation_stopped = threading.Event()
+        self.orientation_stopped = threading.Event()
 
     def run(self):
         retry_count = 0
@@ -127,6 +130,16 @@ class RobotInterface(threading.Thread):
     def process_line(self, line):
         """Process a line received from the Arduino"""
         try:
+            # Détection de la fin de navigation
+            if line.strip() == "STOP_NAVIGATION":
+                self.navigation_stopped.set()
+                logger.info("STOP_NAVIGATION reçu de l'Arduino")
+                return
+            # Détection de la fin d'orientation
+            if line.strip() == "STOP_ORIENTATION":
+                self.orientation_stopped.set()
+                logger.info("STOP_ORIENTATION reçu de l'Arduino")
+                return
             # Process position data (movement interface)
             if "POS" in line:
                 self.position_received.set()
