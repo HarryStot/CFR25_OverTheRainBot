@@ -728,150 +728,91 @@ class RobotBrain(threading.Thread):
 
     def handle_navigating_state(self):
         """
-        Handles navigation logic for the robot while it is in the navigating state.
+        Handles the process of navigating the robot through predefined locations. This method manages
+        steps such as sending movement and orientation commands, waiting for navigation or orientation
+        to complete, and transitioning to executing tasks or idle state. It also ensures adherence to
+        time constraints by redirecting to the end zone if the remaining time is below a specific threshold.
 
-        This method determines the appropriate navigation actions based on the robot's
-        current location, mission time constraints, and obstacle detection status. It
-        also calculates the distance to the target, evaluates the required orientation
-        corrections, and sends movement commands accordingly. The method makes use of
-        potential field navigation for obstacle avoidance if enabled, and supports
-        direct navigation otherwise. Additionally, state transitions occur based on
-        defined criteria such as reaching a target, running out of time, or encountering
-        obstacles.
+        :type self: ClassName
+        :ivar locations: A list of locations the robot is navigating through.
+            Each location contains coordinates and optional orientation.
+        :ivar current_location_index: Index representing the robot's current position in the locations list.
+        :ivar mission_start_time: The timestamp indicating when the mission started.
+        :ivar mission_duration: The overall duration of the mission in seconds.
+        :ivar end_zone_time: Time in seconds to reserve for reaching the end zone.
+        :ivar movement_interface: Interface responsible for sending movement and orientation
+            commands and monitoring their completion.
+        :ivar current_task_index: Index of the currently executing task when transitioning to
+            task execution.
+        :ivar task_start_time: The timestamp indicating when the current task started.
 
-        :raises ValueError: If any unexpected state or condition is encountered
-                            during navigation.
+        :raises AttributeError: If certain internal attributes are unset or improperly configured.
         """
         current_location = self.locations[self.current_location_index]
 
-        # Check if we need to return to end zone based on time
+        # Check if on doit retourner à la zone de fin
         elapsed_time = time.time() - self.mission_start_time
         remaining_time = self.mission_duration - elapsed_time
-
         if remaining_time <= self.end_zone_time:
             logger.warning(f"Only {remaining_time:.1f} seconds remaining! Heading to end zone.")
-            # self.set_state(RobotState.RETURNING_TO_END)
+            # TODO: Implement end zone navigation
             return
 
-        # Check if navigation timed out
-        # if time.time() - self.navigation_start_time > self.navigation_timeout:
-        #     logger.warning(f"Navigation to {current_location.name} timed out")
-        #     self.set_state(RobotState.ERROR)
-        #     return
+        # Initialisation d'un état interne pour ne pas renvoyer les commandes
+        if not hasattr(self, '_nav_phase'):
+            self._nav_phase = 'start'  # 'start', 'waiting_nav', 'waiting_orient', 'done'
 
-        # Check if obstacle detected
-        if self.obstacle_detected:
-            logger.warning("Obstacle detected during navigation")
-            # We'll continue with potential field navigation instead of going to ERROR state
-            # because the potential field should handle obstacle avoidance
+        # PHASE 1 : Envoi de la commande de navigation
+        if self._nav_phase == 'start':
+            # Réinitialise les événements
+            self.movement_interface.navigation_stopped.clear()
+            self.movement_interface.orientation_stopped.clear()
+            # Envoie la commande de déplacement (avec orientation cible)
+            self.send_movement_command(
+                f"GX{current_location.x / 100:.2f}Y{current_location.y / 100:.2f}Z{(current_location.orientation if current_location.orientation is not None else 0) * np.pi / 180:.2f}")
+            logger.info(f"Navigation command to {current_location.name} sent")
+            self._nav_phase = 'waiting_nav'
+            return
 
-        # Get current position
-        current_x, current_y, current_z = position_manager.get_position()
-        current_pos = (current_x, current_y)
-        target_pos = (current_location.x, current_location.y, current_location.orientation)
+        # PHASE 2 : Attente de STOP_NAVIGATION
+        if self._nav_phase == 'waiting_nav':
+            if self.movement_interface.navigation_stopped.is_set():
+                logger.info("STOP_NAVIGATION received, navigation completed")
+                # Si orientation demandée, passe à l'orientation
+                if current_location.orientation is not None:
+                    self._nav_phase = 'waiting_orient'
+                    # Envoie la commande d'orientation (même position, orientation cible)
+                    self.movement_interface.orientation_stopped.clear()
+                    self.send_movement_command(
+                        f"GX{current_location.x / 100:.2f}Y{current_location.y / 100:.2f}Z{current_location.orientation * np.pi / 180:.2f}")
+                    logger.info(f"Orientation command to {current_location.name} sent")
+                else:
+                    self._nav_phase = 'done'
+            else:
+                time.sleep(0.01)
+            return
 
-        # Calculate distance to target
-        distance = ((current_x - current_location.x) ** 2 +
-                    (current_y - current_location.y) ** 2) ** 0.5
+        # PHASE 3 : Attente de STOP_ORIENTATION
+        if self._nav_phase == 'waiting_orient':
+            if self.movement_interface.orientation_stopped.is_set():
+                logger.info("Received STOP_ORIENTATION, orientation completed")
+                self._nav_phase = 'done'
+            else:
+                time.sleep(0.01)
+            return
 
-        # Check if we're at the target location
-        if distance <= self.position_tolerance:
-            # Check orientation if specified
-            if current_location.orientation is not None:
-                orientation_diff = abs(current_z - current_location.orientation) % 360
-                orientation_diff = min(orientation_diff, 360 - orientation_diff)
-
-                if orientation_diff > self.orientation_tolerance:
-                    # Need to adjust orientation
-                    if self.last_sent_orientation != current_location.orientation:
-                        self.last_sent_orientation = current_location.orientation
-                        # Send movement command to adjust orientation
-                        self.send_movement_command(
-                            f"GX{current_location.x / 100:.2f}Y{current_location.y / 100:.2f}Z{(current_location.orientation + orientation_diff * 1.5) * np.pi / 180:.2f}")
-                        logger.debug(f"Adjusting orientation to {current_location.orientation} degrees")
-                    else:
-                        logger.info("Already sent last orientation, skipping movement command")
-                    return
-
-            logger.info(f"Reached location: {current_location.name}")
-            self.send_movement_command("S")  # Stop the robot
-            # If there are tasks to perform, move to EXECUTING_TASK state
+        # PHASE 4 : Passage à la tâche suivante
+        if self._nav_phase == 'done':
+            logger.info(f"Navigation and orientation completed for {current_location.name}")
             if current_location.tasks:
                 self.current_task_index = 0
                 self.set_state(RobotState.EXECUTING_TASK)
                 self.task_start_time = time.time()
             else:
                 self.set_state(RobotState.IDLE)
-        elif self.avoidance_enabled:
-
-            # Navigation using potential field
-            # Convert orientation to radians for potential field calculation
-            robot_heading_rad = np.radians(current_z)
-
-            # Compute control commands using potential field
-            v, omega = self.potential_nav.compute_control(
-                robot_pos=current_pos,
-                robot_heading=robot_heading_rad,
-                target_pos=target_pos,
-                obstacles=self.obstacles
-            )
-
-            # Save last computed control values for debugging
-            self.last_v = v
-            self.last_omega = omega
-
-            # Calculate next waypoint based on potential field
-            # Use a shorter look-ahead distance when obstacles are nearby
-            if self.obstacles:
-                look_ahead_distance = min(distance * 0.5, 5.0)  # Half of distance to target, max 5 units
-            else:
-                look_ahead_distance = min(distance * 0.7, 10.0)  # Longer look-ahead when no obstacles
-
-            # Convert omega (angular velocity) to a heading change
-            # Small delta_t for prediction
-            delta_t = 0.1
-            new_heading_rad = robot_heading_rad + omega * delta_t
-
-            # Calculate waypoint coordinates
-            waypoint_x = current_x + v * np.cos(new_heading_rad) * delta_t * look_ahead_distance
-            waypoint_y = current_y + v * np.sin(new_heading_rad) * delta_t * look_ahead_distance
-
-            # Convert heading back to degrees
-            new_heading_deg = np.degrees(new_heading_rad) % 360
-
-            # Send movement command to robot
-            self.send_movement_command(f"GX{waypoint_x:.2f}Y{waypoint_y:.2f}Z{new_heading_deg:.2f}")
-
-            # Display the current position
-            self.send_lcd_message(f"Team {'Blue' if self.is_blue_team else 'Yellow'}",
-                                  "X: {:.2f} Y: {:.2f}".format(current_x, current_y))
-
-            # Log navigation status
-            if self.obstacles:
-                logger.info(
-                    f"Navigating to {current_location.name} with {len(self.obstacles)} obstacles, distance: {distance:.2f}")
-            else:
-                logger.info(f"Navigating to {current_location.name}, distance: {distance:.2f}")
-
-        elif not self.avoidance_enabled:
-            # Simple direct navigation without potential field
-
-            # Check if we already sent the last position
-            if self.last_sent_position == (current_location.x,
-                                           current_location.y) and time.time() - self.last_sent_position_time < self.send_retry_after:
-                logger.debug("Already sent last position, skipping movement command")
-                self.send_lcd_message(f"Team {'Blue' if self.is_blue_team else 'Yellow'}",
-                                      "X: {:.2f} Y: {:.2f}".format(current_x, current_y))
-                return
-            else:
-                # Update last sent position
-                self.last_sent_position = (current_location.x, current_location.y)
-                self.last_sent_position_time = time.time()
-
-            self.send_movement_command(
-                f"GX{current_location.x / 100:.2f}Y{current_location.y / 100:.2f}Z{(current_location.orientation * np.pi / 180):.2f}")
-
-            logger.info(f"Directly navigating to {current_location.name}, distance: {distance:.2f}")
+            # Réinitialise l'état interne pour la prochaine navigation
+            del self._nav_phase
+            return
 
     def handle_executing_task_state(self):
         """Handle the EXECUTING_TASK state"""
