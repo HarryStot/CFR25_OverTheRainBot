@@ -238,7 +238,7 @@ class RobotBrain(threading.Thread):
 
         # Task execution variables
         self.task_start_time = 0
-        self.task_timeout = 20  # [seconds]
+        self.task_timeout = 10  # [seconds]
 
         # Lock for thread safety
         self.lock = threading.RLock()
@@ -475,7 +475,7 @@ class RobotBrain(threading.Thread):
 
         # Determine which file to load based on team
         mission_file = "blue_missions.json" if self.is_blue_team else "yellow_missions.json"
-        file_path = os.path.join(os.path.dirname(__file__), mission_file)
+        file_path = os.path.join(os.path.dirname(__file__), "missions", mission_file)
 
         try:
             with open(file_path, 'r') as f:
@@ -680,30 +680,28 @@ class RobotBrain(threading.Thread):
         # Handle strings with embedded variables
         if isinstance(value, str):
             # Simple variable replacement (entire string is a variable)
-            if value.startswith('$') and not ':' in value:
+            if value.startswith('$') and ':' not in value:
                 var_name = value[1:]
-                if var_name in variables:
-                    return variables[var_name]
-                return value
-
+                return variables.get(var_name, value)
+                
             # Complex string with embedded variables
             if '$' in value:
-                result = value
-                # Find all variable references
                 import re
+                result = value
                 var_refs = re.findall(r'\$([a-zA-Z0-9_]+)', value)
-
+                
                 # Replace each variable reference
                 for var_name in var_refs:
                     if var_name in variables:
-                        # Replace variable with its value, converting to string if needed
                         var_value = str(variables[var_name])
+                        # Replace variable with its value, converting to string if needed
                         result = result.replace(f'${var_name}', var_value)
-
                 return result
-
+                
         # Return primitive values as is
         return value
+
+        # Return primitive values as is
 
     def handle_idle_state(self):
         """
