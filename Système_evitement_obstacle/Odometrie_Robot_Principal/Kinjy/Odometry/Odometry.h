@@ -12,6 +12,7 @@ public:
     Odometry(float L, float r);
     void init(float x_init, float y_init, float theta_init);
     void updateOdometry(float posR, float posL);
+    void setPosition(float new_x, float new_y, float new_theta);
 };
 
 #endif

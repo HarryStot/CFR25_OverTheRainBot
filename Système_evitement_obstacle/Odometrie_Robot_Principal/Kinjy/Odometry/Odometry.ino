@@ -32,7 +32,7 @@ int x = 0, y = 0, z = 0;
 
 // --- Gains pour la navigation et l'orientation ---
 const float initial_Kp2 = 18;
-float Kp1 = 50, Ki1 = 0;  // NAVIGATION
+float Kp1 = 50, Ki1 = 0;           // NAVIGATION
 float Kp2 = initial_Kp2, Ki2 = 0;  // ORIENTATION
 float integral_angle_error = 0;
 const float eps = 0.02, eps_theta = 0.05;
@@ -42,7 +42,7 @@ float last_x = 0, last_y = 0, last_theta = 0;
 int immobile_counter = 0;
 const int immobile_threshold = 3;
 const float Kp2_increment = 3;
-const float max_Kp2 = 9999; // Je sais pas vraiment si il faut mettre un max j'ai pas encore eu de problème sans
+const float max_Kp2 = 9999;  // Je sais pas vraiment si il faut mettre un max j'ai pas encore eu de problème sans
 
 // --- Vitesse et contrôle temporel ---
 float v = 9.0, w = 0;
@@ -52,21 +52,33 @@ unsigned long lastUpdateTime = 0;
 float dt = 0.0;
 
 // --- États du robot ---
-enum StateType { STOP, NAVIGATION, ORIENTATION, SENDPOS, RECULER};
+enum StateType { STOP,
+                 NAVIGATION,
+                 ORIENTATION,
+                 SENDPOS,
+                 RECULER };
 StateType State = STOP;
 
 // --- Autres variables ---
 int test = 0;
 
 void setup() {
-    Serial.begin(115200);
-    delay(1000);
-    motorR.init();
-    motorL.init();
-    attachInterrupt(digitalPinToInterrupt(ENCAD), [] { motorR.readEncoder(); }, RISING);
-    attachInterrupt(digitalPinToInterrupt(ENCAG), [] { motorL.readEncoder(); }, RISING);
+  Serial.begin(115200);
+  delay(1000);
+  motorR.init();
+  motorL.init();
+  attachInterrupt(
+    digitalPinToInterrupt(ENCAD), [] {
+      motorR.readEncoder();
+    },
+    RISING);
+  attachInterrupt(
+    digitalPinToInterrupt(ENCAG), [] {
+      motorL.readEncoder();
+    },
+    RISING);
 
-    robot.init(x_init, y_init, theta_init);
+  robot.init(x_init, y_init, theta_init);
 }
 
 void loop() {
@@ -77,27 +89,33 @@ void loop() {
 
   robot.updateOdometry(-motorR.pos, motorL.pos);
   unsigned long currentTime = millis();
-  dt = (currentTime - lastUpdateTime) / 1000.0; // Conversion en secondes
+  dt = (currentTime - lastUpdateTime) / 1000.0;  // Conversion en secondes
   lastUpdateTime = currentTime;
-  
+
   switch (State) {
     case STOP:
       Freiner();
-      Serial.print("POS,X:"); Serial.print(robot.x); 
-      Serial.print(",Y:"); Serial.print(robot.y); 
-      Serial.print(",Z:"); Serial.println(robot.theta);
-      // Serial.print(angle_error); Serial.print("   ");Serial.print(speedR);Serial.print("   ");Serial.println(speedL); 
+      Serial.print("POS,X:");
+      Serial.print(robot.x);
+      Serial.print(",Y:");
+      Serial.print(robot.y);
+      Serial.print(",Z:");
+      Serial.println(robot.theta);
+      // Serial.print(angle_error); Serial.print("   ");Serial.print(speedR);Serial.print("   ");Serial.println(speedL);
       break;
-    
+
     case NAVIGATION:
       thetaref = atan2(y_goal - robot.y, x_goal - robot.x);
       w = Kp1 * atan2(sin(thetaref - robot.theta), cos(thetaref - robot.theta));
       setNavigationSpeed(v, w);
 
-      Serial.print("POS,X:"); Serial.print(robot.x); 
-      Serial.print(",Y:"); Serial.print(robot.y); 
-      Serial.print(",Z:"); Serial.println(robot.theta);
-      // Serial.print(angle_error); Serial.print("   ");Serial.print(speedR);Serial.print("   ");Serial.println(speedL); 
+      Serial.print("POS,X:");
+      Serial.print(robot.x);
+      Serial.print(",Y:");
+      Serial.print(robot.y);
+      Serial.print(",Z:");
+      Serial.println(robot.theta);
+      // Serial.print(angle_error); Serial.print("   ");Serial.print(speedR);Serial.print("   ");Serial.println(speedL);
       break;
 
     case ORIENTATION:
@@ -109,16 +127,22 @@ void loop() {
       w = Kp2 * angle_error + Ki2 * integral_angle_error;
       setOrientationSpeed(w);
 
-      Serial.print("POS,X:"); Serial.print(robot.x); 
-      Serial.print(",Y:"); Serial.print(robot.y); 
-      Serial.print(",Z:"); Serial.println(robot.theta);
-      // Serial.print(angle_error); Serial.print("   ");Serial.print(speedR);Serial.print("   ");Serial.println(speedL); 
+      Serial.print("POS,X:");
+      Serial.print(robot.x);
+      Serial.print(",Y:");
+      Serial.print(robot.y);
+      Serial.print(",Z:");
+      Serial.println(robot.theta);
+      // Serial.print(angle_error); Serial.print("   ");Serial.print(speedR);Serial.print("   ");Serial.println(speedL);
       break;
 
     case SENDPOS:
-      Serial.print("POS"); Serial.print(",X:");
-      Serial.print(robot.x); Serial.print(",Y:");
-      Serial.print(robot.y); Serial.print(",Z:");
+      Serial.print("POS");
+      Serial.print(",X:");
+      Serial.print(robot.x);
+      Serial.print(",Y:");
+      Serial.print(robot.y);
+      Serial.print(",Z:");
       Serial.println(robot.theta);
       break;
 
@@ -128,16 +152,29 @@ void loop() {
       w = Kp1 * atan2(sin(thetaref - robot.theta), cos(thetaref - robot.theta));
       setNavigationSpeed(-v, w);
 
-      Serial.print("POS"); Serial.print(",X:");
-      Serial.print(robot.x); Serial.print(",Y:");
-      Serial.print(robot.y); Serial.print(",Z:");
+      Serial.print("POS");
+      Serial.print(",X:");
+      Serial.print(robot.x);
+      Serial.print(",Y:");
+      Serial.print(robot.y);
+      Serial.print(",Z:");
       Serial.println(robot.theta);
       break;
   }
-  Serial.println(State);
-  if ((State == NAVIGATION || State == RECULER) && sqrt(pow(robot.y - y_goal, 2) + pow(robot.x - x_goal, 2)) < eps) {Freiner(); Serial.println("STOP_NAVIGATION"); State = ORIENTATION; }
-  if (State == ORIENTATION && fabs(angle_error) < eps_theta) {Freiner(); Serial.println("STOP_ORIENTATION"); Kp2 = initial_Kp2; State = STOP;}   
-  //if (State == ORIENTATION && fabs(angle_error) < eps_theta && test == 1) {Freiner(); Kp2 = initial_Kp2; State = STOP;} Fonction pour tests                              
+  // Serial.println(State);
+
+  if ((State == NAVIGATION || State == RECULER) && sqrt(pow(robot.y - y_goal, 2) + pow(robot.x - x_goal, 2)) < eps) {
+    Freiner();
+    Serial.println("STOP_NAVIGATION");
+    State = ORIENTATION;
+  }
+  if (State == ORIENTATION && fabs(angle_error) < eps_theta) {
+    Freiner();
+    Serial.println("STOP_ORIENTATION");
+    Kp2 = initial_Kp2;
+    State = STOP;
+  }
+  //if (State == ORIENTATION && fabs(angle_error) < eps_theta && test == 1) {Freiner(); Kp2 = initial_Kp2; State = STOP;} Fonction pour tests
 }
 
 void Freiner() {
@@ -146,48 +183,48 @@ void Freiner() {
 }
 
 void setNavigationSpeed(float v, float w) {
-    float speedR = (v + w * L) / r;
-    float speedL = (v - w * L) / r;
+  float speedR = (v + w * L) / r;
+  float speedL = (v - w * L) / r;
 
-    motorR.setMotorSpeed(speedR);
-    motorL.setMotorSpeed(speedL);
+  motorR.setMotorSpeed(speedR);
+  motorL.setMotorSpeed(speedL);
 }
 
 void setOrientationSpeed(float w) {
-    const int MAX_SPEED = 200;
-    const int MIN_SPEED = 80;
+  const int MAX_SPEED = 200;
+  const int MIN_SPEED = 80;
 
-    float speedR = (w * L) / r;
-    float speedL = (-w * L) / r;
+  float speedR = (w * L) / r;
+  float speedL = (-w * L) / r;
 
-    speedR = constrain(speedR, -MAX_SPEED, MAX_SPEED);
-    speedL = constrain(speedL, -MAX_SPEED, MAX_SPEED);
+  speedR = constrain(speedR, -MAX_SPEED, MAX_SPEED);
+  speedL = constrain(speedL, -MAX_SPEED, MAX_SPEED);
 
-    speedR = (speedR > 0) ? max(speedR, MIN_SPEED) : min(speedR, -MIN_SPEED);
-    speedL = (speedL > 0) ? max(speedL, MIN_SPEED) : min(speedL, -MIN_SPEED);
+  speedR = (speedR > 0) ? max(speedR, MIN_SPEED) : min(speedR, -MIN_SPEED);
+  speedL = (speedL > 0) ? max(speedL, MIN_SPEED) : min(speedL, -MIN_SPEED);
 
-    motorR.setMotorSpeed(speedR);
-    motorL.setMotorSpeed(speedL);
+  motorR.setMotorSpeed(speedR);
+  motorL.setMotorSpeed(speedL);
 }
 
 void adjustKp2() {
-    // Vérifie si le robot est immobile
-    if (robot.x == last_x && robot.y == last_y && robot.theta == last_theta) {
-        immobile_counter++;
-        if (immobile_counter >= immobile_threshold) {
-            Kp2 = min(Kp2 + Kp2_increment, max_Kp2);
-            immobile_counter = 0;
-            Serial.print("Kp2 ajusté : ");
-            Serial.println(Kp2);
-        }
-    } else {
-        immobile_counter = 0;
+  // Vérifie si le robot est immobile
+  if (robot.x == last_x && robot.y == last_y && robot.theta == last_theta) {
+    immobile_counter++;
+    if (immobile_counter >= immobile_threshold) {
+      Kp2 = min(Kp2 + Kp2_increment, max_Kp2);
+      immobile_counter = 0;
+      Serial.print("Kp2 ajusté : ");
+      Serial.println(Kp2);
     }
+  } else {
+    immobile_counter = 0;
+  }
 
-    // Mise à jour des dernières positions
-    last_x = robot.x;
-    last_y = robot.y;
-    last_theta = robot.theta;
+  // Mise à jour des dernières positions
+  last_x = robot.x;
+  last_y = robot.y;
+  last_theta = robot.theta;
 }
 
 void parseCommand(String cmd) {
@@ -195,33 +232,36 @@ void parseCommand(String cmd) {
 
   // Gestion des positions G et INIT
   if (cmd.startsWith("G") || cmd.startsWith("INIT")) {
-      int x = cmd.indexOf('X');
-      int y = cmd.indexOf('Y');
-      int z = cmd.indexOf('Z');
-      
-      if (x != -1 && y != -1 && z != -1 && x < y && y < z) {
-          float xVal = cmd.substring(x + 1, y).toFloat();
-          float yVal = cmd.substring(y + 1, z).toFloat();
-          float zVal = cmd.substring(z + 1).toFloat();
+    int x = cmd.indexOf('X');
+    int y = cmd.indexOf('Y');
+    int z = cmd.indexOf('Z');
 
-          if (cmd.startsWith("G")) {
-              x_goal = xVal;
-              y_goal = yVal;
-              theta_goal = zVal;
-              State = NAVIGATION;
-          } else if (cmd.startsWith("INIT")) {
-              x_init = xVal;
-              y_init = yVal;
-              theta_init = zVal;
-              robot.init(x_init, y_init, theta_init);
-              Serial.println("Initialisation : ");
-          }
+    if (x != -1 && y != -1 && z != -1 && x < y && y < z) {
+      float xVal = cmd.substring(x + 1, y).toFloat();
+      float yVal = cmd.substring(y + 1, z).toFloat();
+      float zVal = cmd.substring(z + 1).toFloat();
 
-          // Affichage pour vérification
-          Serial.print("X : "); Serial.println(xVal);
-          Serial.print("Y : "); Serial.println(yVal);
-          Serial.print("Theta : "); Serial.println(zVal);
+      if (cmd.startsWith("G")) {
+        x_goal = xVal;
+        y_goal = yVal;
+        theta_goal = zVal;
+        State = NAVIGATION;
+      } else if (cmd.startsWith("INIT")) {
+        x_init = xVal;
+        y_init = yVal;
+        theta_init = zVal;
+        robot.init(x_init, y_init, theta_init);
+        Serial.println("Initialisation : ");
       }
+
+      // Affichage pour vérification
+      Serial.print("X : ");
+      Serial.println(xVal);
+      Serial.print("Y : ");
+      Serial.println(yVal);
+      Serial.print("Theta : ");
+      Serial.println(zVal);
+    }
   }
 
   // Gestion des commandes simples
@@ -231,20 +271,25 @@ void parseCommand(String cmd) {
   // Gestion de la vitesse
   int vPos = cmd.indexOf('V');
   if (vPos != -1) {
-      v = cmd.substring(vPos + 1).toFloat();
-      Serial.print("Vitesse : "); Serial.println(v);
+    v = cmd.substring(vPos + 1).toFloat();
+    Serial.print("Vitesse : ");
+    Serial.println(v);
   }
 
   // Gestion du recul
   if (cmd.startsWith("R")) {
-      float dist = cmd.substring(1).toFloat();
-      // Calcul du goal en marche arrière
-      x_goal = robot.x - dist * cos(robot.theta);
-      y_goal = robot.y - dist * sin(robot.theta);
-      theta_goal = robot.theta;
-      theta_goal = atan2(sin(theta_goal), cos(theta_goal));
+    float dist = cmd.substring(1).toFloat();
+    // Calcul du goal en marche arrière
+    x_goal = robot.x - dist * cos(robot.theta);
+    y_goal = robot.y - dist * sin(robot.theta);
+    theta_goal = robot.theta;
+    theta_goal = atan2(sin(theta_goal), cos(theta_goal));
 
-      Serial.print(x_goal);Serial.print(" ");Serial.print(y_goal);Serial.print(" ");Serial.println(theta_goal);
-      State = RECULER;
+    Serial.print(x_goal);
+    Serial.print(" ");
+    Serial.print(y_goal);
+    Serial.print(" ");
+    Serial.println(theta_goal);
+    State = RECULER;
   }
 }
