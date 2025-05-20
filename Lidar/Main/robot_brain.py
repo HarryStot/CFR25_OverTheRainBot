@@ -10,9 +10,13 @@ import RPi.GPIO as GPIO
 import numpy as np
 
 from avoidance_system import PotentialFieldNavigation
+from main import debug
 from position_manager import position_manager
 
 logger = logging.getLogger(__name__)
+
+if debug:
+    logger.setLevel(logging.DEBUG)
 
 
 class RobotState(Enum):
@@ -728,29 +732,13 @@ class RobotBrain(threading.Thread):
 
     def handle_navigating_state(self):
         """
-        Handles the process of navigating the robot through predefined locations. This method manages
-        steps such as sending movement and orientation commands, waiting for navigation or orientation
-        to complete, and transitioning to executing tasks or idle state. It also ensures adherence to
-        time constraints by redirecting to the end zone if the remaining time is below a specific threshold.
-
-        :type self: ClassName
-        :ivar locations: A list of locations the robot is navigating through.
-            Each location contains coordinates and optional orientation.
-        :ivar current_location_index: Index representing the robot's current position in the locations list.
-        :ivar mission_start_time: The timestamp indicating when the mission started.
-        :ivar mission_duration: The overall duration of the mission in seconds.
-        :ivar end_zone_time: Time in seconds to reserve for reaching the end zone.
-        :ivar movement_interface: Interface responsible for sending movement and orientation
-            commands and monitoring their completion.
-        :ivar current_task_index: Index of the currently executing task when transitioning to
-            task execution.
-        :ivar task_start_time: The timestamp indicating when the current task started.
-
-        :raises AttributeError: If certain internal attributes are unset or improperly configured.
+        Handles navigation to the current location, using potential field navigation if enabled.
+        If avoidance_enabled is True, the robot will move through dynamically generated waypoints
+        (goals) computed by the potential field system, instead of going directly to the final goal.
+        Each segment is a straight line, and a new goal is sent only when the previous one is reached.
+        Logs and comments are in English.
         """
         current_location = self.locations[self.current_location_index]
-
-        # Check if on doit retourner à la zone de fin
         elapsed_time = time.time() - self.mission_start_time
         remaining_time = self.mission_duration - elapsed_time
         if remaining_time <= self.end_zone_time:
@@ -758,38 +746,68 @@ class RobotBrain(threading.Thread):
             # TODO: Implement end zone navigation
             return
 
-        # Initialisation d'un état interne pour ne pas renvoyer les commandes
+        # Internal state for navigation phase
         if not hasattr(self, '_nav_phase'):
-            self._nav_phase = 'start'  # 'start', 'waiting_nav', 'waiting_orient', 'done'
+            self._nav_phase = 'start'  # 'start', 'navigating', 'waiting_nav', 'waiting_orient', 'done'
+            self._last_goal = None
+            self._goal_reached = False
 
-        # PHASE 1 : Envoi de la commande de navigation
+        # PHASE 1: Start navigation
         if self._nav_phase == 'start':
-            # Réinitialise les événements
             self.movement_interface.navigation_stopped.clear()
             self.movement_interface.orientation_stopped.clear()
-            # Envoie la commande de déplacement (avec orientation cible)
-            self.send_movement_command(
-                f"GX{current_location.x / 100:.2f}Y{current_location.y / 100:.2f}Z{(current_location.orientation if current_location.orientation is not None else 0) * np.pi / 180:.2f}")
-            logger.info(f"Navigation command to {current_location.name} sent")
-            self._nav_phase = 'waiting_nav'
+            self._nav_phase = 'navigating'
+            self._last_goal = None
+            self._goal_reached = False
+            logger.info(f"Starting navigation to {current_location.name}")
             return
 
-        # PHASE 2 : Attente de STOP_NAVIGATION
-        if self._nav_phase == 'waiting_nav':
-            if self.movement_interface.navigation_stopped.is_set():
-                logger.info("STOP_NAVIGATION received, navigation completed")
-                # Si orientation demandée, passe à l'orientation
-                if current_location.orientation is not None:
-                    self._nav_phase = 'waiting_orient'
-                    # Envoie la commande d'orientation (même position, orientation cible)
-                    self.movement_interface.orientation_stopped.clear()
+        # PHASE 2: Dynamic waypoint navigation
+        if self._nav_phase == 'navigating':
+            current_x, current_y, current_z = position_manager.get_position()
+            robot_pos = (current_x, current_y)
+            target_pos = (current_location.x, current_location.y)
+            distance_to_target = ((current_x - current_location.x) ** 2 + (current_y - current_location.y) ** 2) ** 0.5
+            waypoint_distance = 30  # [cm] Distance for each sub-goal (can be tuned)
+            goal_tolerance = 5  # [cm] Tolerance to consider a goal reached
+
+            if self.avoidance_enabled:
+                # Use potential field to compute the next waypoint
+                robot_heading_rad = np.radians(current_z)
+                v, omega = self.potential_nav.compute_control(
+                    robot_pos=robot_pos,
+                    robot_heading=robot_heading_rad,
+                    target_pos=target_pos,
+                    obstacles=self.obstacles
+                )
+                # Compute the next waypoint at a fixed distance in the direction of the force
+                direction = np.array([np.cos(robot_heading_rad), np.sin(robot_heading_rad)])
+                if np.linalg.norm([v, omega]) > 0:
+                    # Use the direction of the force vector
+                    force_angle = np.arctan2(v * np.sin(robot_heading_rad) + omega, v * np.cos(robot_heading_rad))
+                    direction = np.array([np.cos(force_angle), np.sin(force_angle)])
+                next_goal = np.array(robot_pos) + direction * min(waypoint_distance, distance_to_target)
+                next_goal = next_goal.tolist()
+                # If close to the final target, set the goal to the target
+                if distance_to_target < waypoint_distance:
+                    next_goal = [current_location.x, current_location.y]
+                # Only send a new goal if the previous one is reached or not set
+                if (self._last_goal is None or
+                        ((current_x - self._last_goal[0]) ** 2 + (
+                                current_y - self._last_goal[1]) ** 2) ** 0.5 < goal_tolerance):
+                    self._last_goal = next_goal
+                    logger.info(f"Sending new dynamic goal: X={next_goal[0]:.1f} Y={next_goal[1]:.1f}")
                     self.send_movement_command(
-                        f"GX{current_location.x / 100:.2f}Y{current_location.y / 100:.2f}Z{current_location.orientation * np.pi / 180:.2f}")
-                    logger.info(f"Orientation command to {current_location.name} sent")
+                        f"GX{next_goal[0] / 100:.2f}Y{next_goal[1] / 100:.2f}Z{(current_location.orientation if current_location.orientation is not None else 0) * np.pi / 180:.2f}")
+                    # Wait for Arduino to reach this goal (STOP_NAVIGATION)
+                    self._nav_phase = 'waiting_nav'
                 else:
                     self._nav_phase = 'done'
             else:
-                time.sleep(0.01)
+                logger.info(f"Direct navigation to {current_location.name}")
+                self.send_movement_command(
+                    f"GX{current_location.x / 100:.2f}Y{current_location.y / 100:.2f}Z{(current_location.orientation if current_location.orientation is not None else 0) * np.pi / 180:.2f}")
+                self._nav_phase = 'waiting_nav'
             return
 
         # PHASE 3 : Attente de STOP_ORIENTATION
