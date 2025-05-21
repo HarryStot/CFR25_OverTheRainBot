@@ -7,8 +7,36 @@
     "pin_servo_clamp": 15,
 
     "speed_servo": 8,
+    "speed_step": 100,
 
-    "intitalisation_servo_0": 0,
+    "angle_intitalisation_0": 60,
+    "angle_intitalisation_1": 90,
+    "angle_intitalisation_2": 90,
+    "angle_intitalisation_3": 90,
+    "angle_intitalisation_clamp": 30,
+
+    "intitalisation_height": 100,
+
+    "step_down": 0,
+
+    "angle_grabe_plank": 50,
+    "angle_CansToExt_servo_0": 125,
+    "angle_CansToExt_servo_3": 0,
+
+    "angle_demagnetize_servo_0": 25,
+    "angle_demagnetize_servo_1": 0,
+    "angle_demagnetize_servo_2": 0,
+    "angle_demagnetize_servo_3": 135,
+
+    "step_RaiseToGoBack": 50,
+
+    "angle_Put backInPlace_servo_0": 60,
+    "angle_Put backInPlace_servo_1": 90,
+    "angle_Put backInPlace_servo_2": 90,
+    "angle_Put backInPlace_servo_3": 90,
+
+    "angle_drop_servo_clamp": 10,
+
 
 
 
@@ -17,13 +45,6 @@
   },
 
   "task_templates": {
-    "raise_during_movement": {
-      "command": "STEP",
-      "params": {
-        "": "$h2"
-      },
-      "completion_time": "$default_time"
-    },
     "put_ground": {
       "command": "STEP",
       "params": {
@@ -38,75 +59,6 @@
       },
       "completion_time": "$default_time"
     },
-    "cans_to_ext": {
-      "command": "SRV",
-      "params": {
-        "$id_1": ":$angle_e1:$v_e",
-        "$id_2": ":$angle_e4:$v_e"
-      },
-      "completion_time": "$default_time"
-    },
-    "demagnetize_middle_cans": {
-      "command": "SRV",
-      "params": {
-        "$id_2": ":$angle_d:$v_d",
-        "$id_3": ":$angle_d:$v_d"
-      },
-      "completion_time": "$default_time"
-    },
-    "put_middle_cans_in_front": {
-      "command": "SRV",
-      "params": {
-        "$id_2": ":$angle_i2:$v_i",
-        "$id_3": ":$angle_i3:$v_i"
-      },
-      "completion_time": "$default_time"
-    },
-    "raise_over_the_plank": {
-      "command": "STEP",
-      "params": {
-        "": "$h4"
-      },
-      "completion_time": "$default_time"
-    },
-    "put_cans_in_front": {
-      "command": "SRV",
-      "params": {
-        "$id_1": ":$angle_r1:$v_r",
-        "$id_4": ":$angle_r4:$v_r"
-      },
-      "completion_time": "$default_time"
-    },
-    "put_cans_on_plank": {
-      "command": "STEP",
-      "params": {
-        "": "$h3"
-      },
-      "completion_time": "$default_time"
-    },
-    "drop_plank": {
-      "command": "SRV",
-      "params": {
-        "$id_p": ":$angle_po:$v_p"
-      },
-      "completion_time": "$default_time"
-    },
-    "demagnetize_ext_cans": {
-      "command": "SRV",
-      "params": {
-        "$id_1": ":$angle_d1:$v_d",
-        "$id_4": ":$angle_d4:$v_d"
-      },
-      "completion_time": "$default_time"
-    },
-    "put_magnets_in_front": {
-      "command": "SRV",
-      "params": {
-        "$id_1": ":$angle_i1:$v_i",
-        "$id_4": ":$angle_i4:$v_i"
-      },
-      "completion_time": "$default_time"
-    }
   },
 
   "movement_templates": {
