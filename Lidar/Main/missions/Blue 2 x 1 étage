@@ -32,9 +32,6 @@
 
     "angle_drop_servo_clamp": 10,
 
-
-
-
     "default_time": 5,
     "precision_movement_speed" : 75
   },
@@ -70,7 +67,7 @@
       "completion_time": "$default_time"
     },
 
-    "Grab_plank": {
+    "grab_plank": {
       "command": "SRV",
       "params": {
         "$pin_servo_clamp": ":$angle_grabe_plank:$speed_servo"
@@ -78,7 +75,7 @@
       "completion_time": "$default_time"
     },
 
-    "Cans_to_ext": {
+    "cans_to_ext": {
       "command": "SRV",
       "params": {
         "$pin_servo_0": ":$angle_CansToExt_servo_0:$speed_servo",
@@ -87,7 +84,7 @@
       "completion_time": "$default_time"
     },
 
-    "Demagnetize_middle_can": {
+    "demagnetize_middle_cans": {
       "command": "SRV",
       "params": {
         "$pin_servo_1": ":$angle_demagnetize_servo_1:$speed_servo",
@@ -96,7 +93,7 @@
       "completion_time": "$default_time"
     },
 
-    "Raise_to_go_back": {
+    "raise_to_go_back": {
       "command": "STEP",
       "params": {
         "$speed_step": "$step_RaiseToGoBack"
@@ -104,7 +101,7 @@
       "completion_time": "$default_time"
     },
 
-    "Put_back_in_place": {
+    "put_back_in_place": {
       "command": "SRV",
       "params": {
         "$pin_servo_0": ":$angle_intitalisation_0:$speed_servo",
@@ -115,7 +112,7 @@
       "completion_time": "$default_time"
     },
 
-    "Drop_plank": {
+    "drop_plank": {
       "command": "SRV",
       "params": {
         "$pin_servo_clamp": ":$angle_drop_servo_clamp:$speed_servo"
@@ -123,7 +120,7 @@
       "completion_time": "$default_time"
     },
 
-    "Demagnetize_ext_can": {
+    "demagnetize_ext_can": {
       "command": "SRV",
       "params": {
         "$pin_servo_0": ":$angle_demagnetize_servo_0:$speed_servo",
@@ -152,21 +149,17 @@
   "action_sequences": {
     "deposit": {
       "steps": [
-        {"type": "task", "template": "put_ground"},
-        {"type": "task", "template": "grab_plank"},
         {"type": "task", "template": "cans_to_ext"},
         {"type": "task", "template": "demagnetize_middle_cans"},
+        {"type": "task", "template": "raise_to_go_back"},
         {"type": "movement", "template": "back_up"},
-        {"type": "task", "template": "put_middle_cans_in_front"},
-        {"type": "task", "template": "raise_over_the_plank"},
-        {"type": "movement", "template": "precision_approach"},
-        {"type": "task", "template": "put_cans_in_front"},
-        {"type": "task", "template": "put_cans_on_plank"},
+        {"type": "task", "template": "put_back_in_place"},
+        {"type": "task", "template": "down_step"},
         {"type": "task", "template": "drop_plank"},
-        {"type": "task", "template": "demagnetize_ext_cans"},
+        {"type": "task", "template": "demagnetize_ext_can"},
         {"type": "movement", "template": "back_up"},
-        {"type": "task", "template": "put_magnets_in_front"},
-        {"type": "task", "template": "put_ground"}
+        {"type": "movement", "template": "initalisation_serv"},
+        {"type": "movement", "template": "initalisation_step"},
       ]
     }
   },
@@ -179,6 +172,24 @@
       "orientation": 90,
       "tasks": []
     },
+
+    {
+      "name": "InFrontFirstBlueStock",
+      "x": 190.0,
+      "y": 70.0,
+      "orientation": 90,
+      "tasks": [
+        {
+          "name": "InitalisationServo",
+          "template": "initalisation_servo"
+        },
+      {
+          "name": "InitalisationStep",
+          "template": "initalisation_step"
+        }
+      ]
+    },
+
     {
       "name": "FirstBlueStock",
       "x": 190.0,
@@ -186,11 +197,17 @@
       "orientation": 90,
       "tasks": [
         {
-          "name": "RaiseDuringMovement",
-          "template": "raise_during_movement"
+          "name": "StepDown",
+          "template": "down_step"
+        },
+        {
+          "name": "GrabPlank",
+          "template": "grab_plank"
         }
       ]
     },
+
+
     {
       "name": "BlueDropToFirstDeposit",
       "x": 177.5,
