@@ -1,0 +1,216 @@
+{
+  "variables": {
+    "pin_servo_0": 0,
+    "pin_servo_1": 1,
+    "pin_servo_2": 2,
+    "pin_servo_3": 3,
+    "pin_servo_clamp": 15,
+
+    "speed_servo": 8,
+    "speed_step": 100,
+
+    "angle_intitalisation_0": 30,
+    "angle_intitalisation_1": 90,
+    "angle_intitalisation_2": 90,
+    "angle_intitalisation_3": 90,
+    "angle_intitalisation_clamp": 30,
+
+    "step_intitalisation": 100,
+
+    "step_down": 0,
+
+    "angle_grabe_plank": 50,
+    "angle_CansToExt_servo_0": 125,
+    "angle_CansToExt_servo_3": 0,
+
+    "angle_demagnetize_servo_0": 25,
+    "angle_demagnetize_servo_1": 0,
+    "angle_demagnetize_servo_2": 0,
+    "angle_demagnetize_servo_3": 135,
+
+    "step_RaiseToGoBack": 50,
+
+    "angle_drop_servo_clamp": 10,
+
+    "default_time": 5,
+
+  },
+
+  "task_templates": {
+
+    "initalisation_servo": {
+      "command": "SRV",
+      "params": {
+        "$pin_servo_0": ":$angle_intitalisation_0:$speed_servo",
+        "$pin_servo_1": ":$angle_intitalisation_1:$speed_servo",
+        "$pin_servo_2": ":$angle_intitalisation_2:$speed_servo",
+        "$pin_servo_3": ":$angle_intitalisation_3:$speed_servo",
+        "$pin_servo_clamp": ":$angle_intitalisation_clamp:$speed_servo",
+      },
+      "completion_time": "$default_time"
+    },
+
+
+    "initalisation_step": {
+      "command": "STEP",
+      "params": {
+        "$speed_step": "$step_intitalisation"
+      },
+      "completion_time": "$default_time"
+    },
+
+    "down_step": {
+      "command": "STEP",
+      "params": {
+        "$speed_step": "$step_down"
+      },
+      "completion_time": "$default_time"
+    },
+
+    "grab_plank": {
+      "command": "SRV",
+      "params": {
+        "$pin_servo_clamp": ":$angle_grabe_plank:$speed_servo"
+      },
+      "completion_time": "$default_time"
+    },
+
+    "cans_to_ext": {
+      "command": "SRV",
+      "params": {
+        "$pin_servo_0": ":$angle_CansToExt_servo_0:$speed_servo",
+        "$pin_servo_3": ":$angle_CansToExt_servo_3:$speed_servo",
+      },
+      "completion_time": "$default_time"
+    },
+
+    "demagnetize_middle_cans": {
+      "command": "SRV",
+      "params": {
+        "$pin_servo_1": ":$angle_demagnetize_servo_1:$speed_servo",
+        "$pin_servo_2": ":$angle_demagnetize_servo_2:$speed_servo",
+      },
+      "completion_time": "$default_time"
+    },
+
+    "raise_to_go_back": {
+      "command": "STEP",
+      "params": {
+        "$speed_step": "$step_RaiseToGoBack"
+      },
+      "completion_time": "$default_time"
+    },
+
+    "put_back_in_place": {
+      "command": "SRV",
+      "params": {
+        "$pin_servo_0": ":$angle_intitalisation_0:$speed_servo",
+        "$pin_servo_1": ":$angle_intitalisation_1:$speed_servo",
+        "$pin_servo_2": ":$angle_intitalisation_2:$speed_servo",
+        "$pin_servo_3": ":$angle_intitalisation_3:$speed_servo",
+      },
+      "completion_time": "$default_time"
+    },
+
+    "drop_plank": {
+      "command": "SRV",
+      "params": {
+        "$pin_servo_clamp": ":$angle_drop_servo_clamp:$speed_servo"
+      },
+      "completion_time": "$default_time"
+    },
+
+    "demagnetize_ext_can": {
+      "command": "SRV",
+      "params": {
+        "$pin_servo_0": ":$angle_demagnetize_servo_0:$speed_servo",
+        "$pin_servo_3": ":$angle_demagnetize_servo_3:$speed_servo",
+      },
+      "completion_time": "$default_time"
+    },
+
+  },
+
+  "movement_templates": {
+
+    "turn_around": [
+      {"command": "V", "params": {"speed": "$rotation_speed"}},
+      {"command": "R", "params": {"angle": 180}}
+    ],
+    "back_up": [
+      {"command": "V", "params": {"speed": "$movement_speed"}},
+      {"command": "B", "params": {"distance": 5}}
+    ]
+  },
+
+  "action_sequences": {
+    "deposit": {
+      "steps": [
+        {"type": "task", "template": "cans_to_ext"},
+        {"type": "task", "template": "demagnetize_middle_cans"},
+        {"type": "task", "template": "raise_to_go_back"},
+        {"type": "movement", "template": "back_up"},
+        {"type": "task", "template": "put_back_in_place"},
+        {"type": "task", "template": "down_step"},
+        {"type": "task", "template": "drop_plank"},
+        {"type": "task", "template": "demagnetize_ext_can"},
+        {"type": "movement", "template": "back_up"},
+        {"type": "movement", "template": "initalisation_serv"},
+        {"type": "movement", "template": "initalisation_step"},
+      ]
+    }
+  },
+
+  "locations": [
+    {
+      "name": "BlueStart",
+      "x": 177.5,
+      "y": 5.0,
+      "orientation": 90,
+      "tasks": []
+    },
+
+    {
+      "name": "InFrontFirstBlueStock",
+      "x": 190.0,
+      "y": 70.0,
+      "orientation": 90,
+      "tasks": [
+        {
+          "name": "InitalisationServo",
+          "template": "initalisation_servo"
+        },
+      {
+          "name": "InitalisationStep",
+          "template": "initalisation_step"
+        }
+      ]
+    },
+
+    {
+      "name": "FirstBlueStock",
+      "x": 190.0,
+      "y": 80.0,
+      "orientation": 90,
+      "tasks": [
+        {
+          "name": "StepDown",
+          "template": "down_step"
+        },
+        {
+          "name": "GrabPlank",
+          "template": "grab_plank"
+        }
+      ]
+    },
+
+
+    {
+      "name": "BlueDropToFirstDeposit",
+      "x": 177.5,
+      "y": 40.0,
+      "orientation": -90,
+      "action_sequence": "deposit"
+    }
+  ]
+}
