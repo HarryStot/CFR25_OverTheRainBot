@@ -9,13 +9,13 @@
     "speed_servo": 8,
     "speed_step": 100,
 
-    "angle_intitalisation_0": 60,
+    "angle_intitalisation_0": 30,
     "angle_intitalisation_1": 90,
     "angle_intitalisation_2": 90,
     "angle_intitalisation_3": 90,
     "angle_intitalisation_clamp": 30,
 
-    "intitalisation_height": 100,
+    "step_intitalisation": 100,
 
     "step_down": 0,
 
@@ -30,11 +30,6 @@
 
     "step_RaiseToGoBack": 50,
 
-    "angle_Put backInPlace_servo_0": 60,
-    "angle_Put backInPlace_servo_1": 90,
-    "angle_Put backInPlace_servo_2": 90,
-    "angle_Put backInPlace_servo_3": 90,
-
     "angle_drop_servo_clamp": 10,
 
 
@@ -45,20 +40,98 @@
   },
 
   "task_templates": {
-    "put_ground": {
-      "command": "STEP",
-      "params": {
-        "": "$h0"
-      },
-      "completion_time": "$default_time"
-    },
-    "grab_plank": {
+
+    "initalisation_servo": {
       "command": "SRV",
       "params": {
-        "$id_p": ":$angle_pf:$v_p"
+        "$pin_servo_0": ":$angle_intitalisation_0:$speed_servo",
+        "$pin_servo_1": ":$angle_intitalisation_1:$speed_servo",
+        "$pin_servo_2": ":$angle_intitalisation_2:$speed_servo",
+        "$pin_servo_3": ":$angle_intitalisation_3:$speed_servo",
+        "$pin_servo_clamp": ":$angle_intitalisation_clamp:$speed_servo",
       },
       "completion_time": "$default_time"
     },
+
+
+    "initalisation_step": {
+      "command": "STEP",
+      "params": {
+        "$speed_step": "$step_intitalisation"
+      },
+      "completion_time": "$default_time"
+    },
+
+    "down_step": {
+      "command": "STEP",
+      "params": {
+        "$speed_step": "$step_down"
+      },
+      "completion_time": "$default_time"
+    },
+
+    "Grab_plank": {
+      "command": "SRV",
+      "params": {
+        "$pin_servo_clamp": ":$angle_grabe_plank:$speed_servo"
+      },
+      "completion_time": "$default_time"
+    },
+
+    "Cans_to_ext": {
+      "command": "SRV",
+      "params": {
+        "$pin_servo_0": ":$angle_CansToExt_servo_0:$speed_servo",
+        "$pin_servo_3": ":$angle_CansToExt_servo_3:$speed_servo",
+      },
+      "completion_time": "$default_time"
+    },
+
+    "Demagnetize_middle_can": {
+      "command": "SRV",
+      "params": {
+        "$pin_servo_1": ":$angle_demagnetize_servo_1:$speed_servo",
+        "$pin_servo_2": ":$angle_demagnetize_servo_2:$speed_servo",
+      },
+      "completion_time": "$default_time"
+    },
+
+    "Raise_to_go_back": {
+      "command": "STEP",
+      "params": {
+        "$speed_step": "$step_RaiseToGoBack"
+      },
+      "completion_time": "$default_time"
+    },
+
+    "Put_back_in_place": {
+      "command": "SRV",
+      "params": {
+        "$pin_servo_0": ":$angle_intitalisation_0:$speed_servo",
+        "$pin_servo_1": ":$angle_intitalisation_1:$speed_servo",
+        "$pin_servo_2": ":$angle_intitalisation_2:$speed_servo",
+        "$pin_servo_3": ":$angle_intitalisation_3:$speed_servo",
+      },
+      "completion_time": "$default_time"
+    },
+
+    "Drop_plank": {
+      "command": "SRV",
+      "params": {
+        "$pin_servo_clamp": ":$angle_drop_servo_clamp:$speed_servo"
+      },
+      "completion_time": "$default_time"
+    },
+
+    "Demagnetize_ext_can": {
+      "command": "SRV",
+      "params": {
+        "$pin_servo_0": ":$angle_demagnetize_servo_0:$speed_servo",
+        "$pin_servo_3": ":$angle_demagnetize_servo_3:$speed_servo",
+      },
+      "completion_time": "$default_time"
+    },
+
   },
 
   "movement_templates": {
