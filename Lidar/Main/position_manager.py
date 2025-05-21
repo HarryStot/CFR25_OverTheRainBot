@@ -51,12 +51,14 @@ class PositionManager:
                 'initial_pos': (0, 0, 0),  # x, y, orientation TODO: Change
             },
             Team.BLUE: {
-                'initial_pos': (0, 0, 0),  # x, y, orientation TODO: Change
+                'initial_pos': (177.5, 5.0, 90.0),  # x, y, orientation TODO: Change
             }
         }
 
         # Robot position in meters
         self._pos_x, self._pos_y, self._pos_z = self._team_configs[self._team]['initial_pos']
+        self._targ_x = self._pos_x  # Target position
+        self._targ_y = self._pos_y
 
         # Movement state
         self._velocity = 0
@@ -119,6 +121,11 @@ class PositionManager:
         with self._lock:
             team_to_use = team if team is not None else self._team
             return self._team_configs[team_to_use]
+
+    def get_target(self):
+        """Get current target position"""
+        with self._lock:
+            return self._targ_x, self._targ_y
 
 
 # Create a singleton instance

@@ -1,42 +1,40 @@
 {
   "variables": {
-    "x_c": 0,
-    "y_c": 0,
-    "z_c": 0,
-    "x_d": 0,
-    "y_d": 0,
-    "z_d": 0,
-    "x_r": 0,
-    "y_r": 0,
-    "z_r": 0,
-    "h0": 10,
-    "h1": 20,
-    "h2": 30,
-    "h3": 40,
-    "h4": 50,
-    "id_1": 1,
-    "id_2": 2,
-    "id_3": 3,
-    "id_4": 4,
-    "id_p": 5,
-    "angle_po": 0,
-    "angle_pf": 90,
-    "v_p": 50,
-    "angle_e1": 0,
-    "angle_e4": 90,
-    "v_e": 0,
-    "angle_r1": 0,
-    "angle_r4": 90,
-    "v_r": 0,
-    "angle_d": 0,
-    "v_d": 0,
-    "a_i1": 0,
-    "a_i2": 0,
-    "a_i3": 0,
-    "a_i4": 0,
-    "v_i": 0,
-    "default_time": -1
+    "pin_servo_0": 0,
+    "pin_servo_1": 1,
+    "pin_servo_2": 2,
+    "pin_servo_3": 3,
+    "pin_servo_clamp": 15,
+
+    "speed_servo": 8,
+    "speed_step": 100,
+
+    "angle_intitalisation_0": 90,
+    "angle_intitalisation_1": 90,
+    "angle_intitalisation_2": 40,
+    "angle_intitalisation_3": 45,
+    "angle_intitalisation_clamp": 10,
+
+    "step_intitalisation": 100,
+
+    "step_down": 0,
+
+    "angle_grabe_plank": 60,
+    "angle_CansToExt_servo_0": 150,
+    "angle_CansToExt_servo_3": 0,
+
+    "angle_demagnetize_servo_0": 30,
+    "angle_demagnetize_servo_1": 140,
+    "angle_demagnetize_servo_2": 0,
+    "angle_demagnetize_servo_3": 90,
+
+    "step_RaiseToGoBack": 50,
+
+    "angle_drop_servo_clamp": 10,
+
+    "default_time": 5,
   },
+
 
   "task_templates": {
     "raise_during_movement": {

@@ -133,12 +133,12 @@ class RobotInterface(threading.Thread):
             # Détection de la fin de navigation
             if line.strip() == "STOP_NAVIGATION":
                 self.navigation_stopped.set()
-                logger.info("STOP_NAVIGATION reçu de l'Arduino")
+                logger.info("STOP_NAVIGATION receive from Arduino")
                 return
             # Détection de la fin d'orientation
             if line.strip() == "STOP_ORIENTATION":
                 self.orientation_stopped.set()
-                logger.info("STOP_ORIENTATION reçu de l'Arduino")
+                logger.info("STOP_ORIENTATION receive from Arduino")
                 return
             # Process position data (movement interface)
             if "POS" in line:

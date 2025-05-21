@@ -286,7 +286,7 @@ def main():
 
     try:
         # Start the lidar thread
-        lidar_thread = LidarThread('/dev/ttyUSB0', stop_event, end_event)
+        lidar_thread = LidarThread('/dev/ttyUSB0', stop_event, end_event, debugCV=True)
         lidar_thread.start()
         logger.info("LidarThread started")
 

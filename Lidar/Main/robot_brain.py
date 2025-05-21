@@ -10,13 +10,11 @@ import RPi.GPIO as GPIO
 import numpy as np
 
 from avoidance_system import PotentialFieldNavigation
-from main import debug
 from position_manager import position_manager
 
 logger = logging.getLogger(__name__)
 
-if debug:
-    logger.setLevel(logging.DEBUG)
+
 
 
 class RobotState(Enum):
@@ -211,6 +209,7 @@ class RobotBrain(threading.Thread):
         self.previous_state = None
         self.state_changed = threading.Event()
         self.avoidance_enabled = False
+        self.use_default_mission = False  # Use default missions
 
         # Last position sent to the robot
         self.last_sent_position = None  # Last position sent to the robot
@@ -393,7 +392,7 @@ class RobotBrain(threading.Thread):
             # Send the initial position to the robot
             initial_pos = position_manager.get_position()
             logger.info(f"Initial position set to: {initial_pos}")
-            self.movement_interface.send_command(f"INITX{initial_pos[0]}Y{initial_pos[1]}Z{initial_pos[2]}")
+            self.movement_interface.send_command(f"INITX{initial_pos[0] / 100}Y{initial_pos[1] / 100}Z{initial_pos[2] * np.pi / 180}")
 
             # Update LCD to show team is confirmed
             self.send_lcd_message(f"{team_name}", "CONFIRMED!")
@@ -472,6 +471,13 @@ class RobotBrain(threading.Thread):
         movement templates, and action sequences.
         """
         self.clear_locations()
+
+        if self.use_default_mission:
+            self.add_location(Location("Test", 100, 0, -90))
+            self.add_location(Location("Test 2", 100, -100, -90))
+            logger.warning("Using default mission locations")
+            return
+
 
         # Determine which file to load based on team
         mission_file = "blue_missions.json" if self.is_blue_team else "yellow_missions.json"
@@ -721,12 +727,12 @@ class RobotBrain(threading.Thread):
             self.current_location_index += 1
             self.current_task_index = -1
             logger.info(f"Moving to next location: {self.locations[self.current_location_index]}")
-            time.sleep(0.5)  # Allow some time for the robot to prepare
+            time.sleep(0.1)  # Allow some time for the robot to prepare
             self.set_state(RobotState.NAVIGATING)
             self.navigation_start_time = time.time()
         else:
             # No more locations, wait for new ones
-            time.sleep(0.5)
+            time.sleep(0.01)
 
     def handle_navigating_state(self):
         """
@@ -808,7 +814,25 @@ class RobotBrain(threading.Thread):
                 self._nav_phase = 'waiting_nav'
             return
 
-        # PHASE 3 : Attente de STOP_ORIENTATION
+        # PHASE 3: Waiting for STOP_NAVIGATION
+        if self._nav_phase == 'waiting_nav':
+            if self.movement_interface.navigation_stopped.is_set():
+                logger.info("Received STOP_NAVIGATION, navigation completed")
+                self._nav_phase = 'waiting_orient'
+                self.movement_interface.navigation_stopped.clear()
+                # Check if we need to orient
+                if current_location.orientation is not None:
+                    logger.info(f"Orienting to {current_location.orientation} degrees")
+                    self.send_movement_command(
+                        f"GX{current_location.x / 100:.2f}Y{current_location.y / 100:.2f}Z{(current_location.orientation if current_location.orientation is not None else 0) * np.pi / 180:.2f}")
+                else:
+                    logger.info("No orientation needed, moving to next phase")
+                    self._nav_phase = 'done'
+            else:
+                time.sleep(0.01)
+            return
+
+        # PHASE 4 : Attente de STOP_ORIENTATION
         if self._nav_phase == 'waiting_orient':
             if self.movement_interface.orientation_stopped.is_set():
                 logger.info("Received STOP_ORIENTATION, orientation completed")
@@ -817,7 +841,7 @@ class RobotBrain(threading.Thread):
                 time.sleep(0.01)
             return
 
-        # PHASE 4 : Passage à la tâche suivante
+        # PHASE 5 : Passage à la tâche suivante
         if self._nav_phase == 'done':
             logger.info(f"Navigation and orientation completed for {current_location.name}")
             if current_location.tasks:

@@ -78,9 +78,9 @@ def main():
 
     # Import your modules only after confirming serial connection
     try:
-        from position_manager import position_manager
-        from robot_interface import RobotInterface
-        from lidar_interface import LidarThread
+        from ..position_manager import position_manager
+        from ..robot_interface import RobotInterface
+        from ..lidar_interface import LidarThread
     except ImportError as e:
         logger.error(f"Failed to import required modules: {e}")
         return

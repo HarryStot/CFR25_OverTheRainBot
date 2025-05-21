@@ -37,15 +37,71 @@ def main():
         # Wait for the robot to be ready
         time.sleep(3)
         robot_interface.send_command("S")
-        robot_interface.send_command("V150")
+        robot_interface.send_command("INITX1.775Y0.05Z1.57")
+        # robot_interface.send_command("V150")
+        time.sleep(1)
 
         logger.info("Sending command to move 1 meter...")
-        # robot_interface.send_command("GX1.00Y0.00Z0.00")
-        robot_interface.send_command("R2")
+        robot_interface.send_command("GX1.9Y0.80Z1.57")
+        # robot_interface.send_command("R2")
 
+        # Modified loop to use the global running variable
+        while not robot_interface.navigation_stopped.is_set() and running:
+            time.sleep(0.1)
 
-        logger.info("Waiting for the end of the movement...")
-        time.sleep(15)  # TODO: remove
+        # Check if we exited due to signal
+        if not running:
+            logger.info("Operation cancelled by user")
+            return
+
+        while not robot_interface.orientation_stopped.is_set() and running:
+            time.sleep(0.1)
+
+        # Check again if we exited due to signal
+        if not running:
+            logger.info("Operation cancelled by user")
+            return
+
+        robot_interface.navigation_stopped.clear()
+        robot_interface.orientation_stopped.clear()
+
+        robot_interface.send_command("GX1.9Y0.80Z0")
+
+        while not robot_interface.navigation_stopped.is_set() and running:
+            time.sleep(0.1)
+
+        if not running:
+            logger.info("Operation cancelled by user")
+            return
+
+        while not robot_interface.orientation_stopped.is_set() and running:
+            time.sleep(0.1)
+
+        if not running:
+            logger.info("Operation cancelled by user")
+            return
+
+        robot_interface.navigation_stopped.clear()
+        robot_interface.orientation_stopped.clear()
+
+        robot_interface.send_command("GX1.9Y0.80Z-1.57")
+
+        while not robot_interface.navigation_stopped.is_set() and running:
+            time.sleep(0.1)
+
+        if not running:
+            logger.info("Operation cancelled by user")
+            return
+
+        while not robot_interface.orientation_stopped.is_set() and running:
+            time.sleep(0.1)
+
+        if not running:
+            logger.info("Operation cancelled by user")
+            return
+
+        robot_interface.navigation_stopped.clear()
+        robot_interface.orientation_stopped.clear()
 
         # Stopping the robot
         logger.info("Stopping the robot...")
@@ -54,6 +110,9 @@ def main():
     except Exception as e:
         logger.error(f"Error in main: {e}")
     finally:
+        logger.info("Stopping the robot...")
+        robot_interface.send_command("S")
+
         logger.info("Stopping all threads...")
         stop_event.set()
 

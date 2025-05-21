@@ -9,24 +9,24 @@
     "speed_servo": 8,
     "speed_step": 100,
 
-    "angle_intitalisation_0": 30,
+    "angle_intitalisation_0": 90,
     "angle_intitalisation_1": 90,
-    "angle_intitalisation_2": 90,
-    "angle_intitalisation_3": 90,
-    "angle_intitalisation_clamp": 30,
+    "angle_intitalisation_2": 40,
+    "angle_intitalisation_3": 45,
+    "angle_intitalisation_clamp": 10,
 
     "step_intitalisation": 100,
 
     "step_down": 0,
 
-    "angle_grabe_plank": 50,
-    "angle_CansToExt_servo_0": 125,
+    "angle_grabe_plank": 60,
+    "angle_CansToExt_servo_0": 150,
     "angle_CansToExt_servo_3": 0,
 
-    "angle_demagnetize_servo_0": 25,
-    "angle_demagnetize_servo_1": 0,
+    "angle_demagnetize_servo_0": 30,
+    "angle_demagnetize_servo_1": 140,
     "angle_demagnetize_servo_2": 0,
-    "angle_demagnetize_servo_3": 135,
+    "angle_demagnetize_servo_3": 90,
 
     "step_RaiseToGoBack": 50,
 
@@ -35,6 +35,7 @@
     "default_time": 5,
 
   },
+
 
   "task_templates": {
 
