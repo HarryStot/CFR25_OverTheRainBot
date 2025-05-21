@@ -33,7 +33,7 @@
     "angle_drop_servo_clamp": 10,
 
     "default_time": 5,
-    "precision_movement_speed" : 75
+
   },
 
   "task_templates": {
@@ -132,10 +132,7 @@
   },
 
   "movement_templates": {
-    "precision_approach": [
-      {"command": "V", "params": {"speed": "$precision_movement_speed"}},
-      {"command": "F", "params": {"distance": 5}}
-    ],
+
     "turn_around": [
       {"command": "V", "params": {"speed": "$rotation_speed"}},
       {"command": "R", "params": {"angle": 180}}
