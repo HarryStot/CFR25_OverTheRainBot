@@ -1,331 +1,250 @@
 #include "Motor_Control.h"
 #include "Odometry.h"
-#include <math.h> // Include for M_PI
 
-#define ENCAD 18 // Vert 
-#define ENCBD 19 // Blanc
-#define PWMD 11  // 
-#define DIRD 13  // 
-#define ENCAG 21 // Blanc
-#define ENCBG 20 // Vert
-#define PWMG 3   // 
-#define DIRG 12  // 
+// --- Définition des broches pour les moteurs et encodeurs ---
+#define ENCAD 19
+#define ENCBD 18
+#define PWMD 3
+#define DIRD 12
+#define BRKD 9
 
-float L = 0.322 / 2;
-float r = 0.083 / 2;
+#define ENCAG 21
+#define ENCBG 20
+#define PWMG 11
+#define DIRG 13
+#define BRKG 8
 
-Motor motorR(ENCAD, ENCBD, PWMD, DIRD);
-Motor motorL(ENCAG, ENCBG, PWMG, DIRG);
+// --- Dimensions du robot ---
+const float L = 0.325 / 2;
+const float r = 0.084 / 2;
+const float pi = 3.1416;
+
+// --- Objets moteurs et odométrie ---
+Motor motorR(ENCAD, ENCBD, PWMD, DIRD, BRKD, BRKG);
+Motor motorL(ENCAG, ENCBG, PWMG, DIRG, BRKD, BRKG);
 Odometry robot(L, r);
 
-float v = 10.0, w;
-float x_goal = 0, y_goal = 1, theta_goal = M_PI/2;
-float K1 = 2.5; // Tuning parameter for angular speed during navigation
-float K_align = 10.0; // Tuning parameter for angular speed during alignment
-float eps = 0.001; // Position tolerance
-float alignment_tolerance = 0.05; // Angular tolerance for alignment (radians)
+// --- Position initiale et objectifs ---
+float x_init = 0, y_init = 0, theta_init = 0;
+float x_goal = 0, y_goal = 0, theta_goal = 0;
+float thetaref = 0;
+int x = 0, y = 0, z = 0;
 
-// Added debug flag
-bool debug = false; 
+// --- Gains pour la navigation et l'orientation ---
+const float initial_Kp2 = 18;
+float Kp1 = 50, Ki1 = 0;  // NAVIGATION
+float Kp2 = initial_Kp2, Ki2 = 0;  // ORIENTATION
+float integral_angle_error = 0;
+const float eps = 0.02, eps_theta = 0.05;
 
-enum StateType { STOP, ALIGNING, NAVIGATION, SENDPOS }; // Added ALIGNING state
-StateType State = STOP; // Initialize state to STOP
-StateType previousState = STOP; // Initialize previousState accordingly
+// --- Variables pour l'ajustement dynamique de Kp2 ---
+float last_x = 0, last_y = 0, last_theta = 0;
+int immobile_counter = 0;
+const int immobile_threshold = 3;
+const float Kp2_increment = 3;
+const float max_Kp2 = 9999; // Je sais pas vraiment si il faut mettre un max j'ai pas encore eu de problème sans
 
-// Helper function to find the end index for a value associated with a command character
-int findValueEnd(const String& cmd, int startIndex) {
-  int endIndex = cmd.length();
-  for (int i = startIndex; i < cmd.length(); i++) {
-    char c = cmd.charAt(i);
-    // Stop if another command character is found
-    if (c == 'G' || c == 'Y' || c == 'Z' || c == 'S' || c == 'P' || c == 'V' ||
-        c == 'E' || c == 'T' || c == 'X' || c == 'D') {
-      endIndex = i;
-      break;
-    }
-  }
-  return endIndex;
-}
+// --- Vitesse et contrôle temporel ---
+float v = 9.0, w = 0;
+float speedR = 0, speedL = 0;
+float angle_error = pi;
+unsigned long lastUpdateTime = 0;
+float dt = 0.0;
 
+// --- États du robot ---
+enum StateType { STOP, NAVIGATION, ORIENTATION, SENDPOS, RECULER};
+StateType State = STOP;
+
+// --- Autres variables ---
+int test = 0;
 
 void setup() {
     Serial.begin(115200);
-    Serial.println("Robot Odometry System Initialized");
-    Serial.println("Commands:");
-    Serial.println("  GX[val]Y[val]Z[val] - Go to position (cm, degrees)");
-    Serial.println("  SETX[val]Y[val]Z[val] - Set current position (cm, degrees)");
-    Serial.println("  V[val] - Set velocity");
-    Serial.println("  S - Stop");
-    Serial.println("  P - Request position");
-    Serial.println("  D1 - Debug mode on");
-    Serial.println("  D0 - Debug mode off");
-    Serial.println("  ENC[1/2] - Return encoder position (1 for motorR, 2 for motorL)");
-
+    delay(1000);
     motorR.init();
     motorL.init();
     attachInterrupt(digitalPinToInterrupt(ENCAD), [] { motorR.readEncoder(); }, RISING);
     attachInterrupt(digitalPinToInterrupt(ENCAG), [] { motorL.readEncoder(); }, RISING);
+
+    robot.init(x_init, y_init, theta_init);
 }
 
 void loop() {
   if (Serial.available()) {
     String cmd = Serial.readStringUntil('\n');
-    cmd.trim();
-
-    // Process state change commands first
-    if (cmd.indexOf('S') != -1 && cmd.indexOf("SET") == -1) { // Stop command but not SET command
-      State = STOP;
-      if (debug) Serial.println("Command: STOP");
-    } else if (cmd.indexOf('P') != -1) {
-      previousState = State;
-      State = SENDPOS;
-      if (debug) Serial.println("Command: SEND POSITION");
-    } else if (cmd.indexOf('D') != -1) {
-      // Debug mode toggle
-      int dPos = cmd.indexOf('D');
-      int dEnd = findValueEnd(cmd, dPos + 1);
-      int debugVal = cmd.substring(dPos + 1, dEnd).toInt();
-      debug = (debugVal == 1);
-      Serial.print("Debug mode: "); 
-      Serial.println(debug ? "ON" : "OFF");
-    } else if (State == STOP && (cmd.indexOf('G') != -1 || cmd.indexOf('V') != -1)) {
-      // If stopped and a new goal or velocity is received, decide whether to align or navigate
-      if (cmd.indexOf('G') != -1) { // If goal is present, start with alignment
-           State = ALIGNING;
-           if (debug) Serial.println("Command: ALIGN to new goal");
-      } else { // If only velocity is present, just store it for future use
-           if (debug) Serial.println("Command: Set velocity (robot remains stopped)");
-      }
-    }
-
-    // Process SET command
-    if (cmd.indexOf("SET") != -1) {
-      int xPos = cmd.indexOf('X');
-      int yPos = cmd.indexOf('Y');
-      int zPos = cmd.indexOf('Z');
-      
-      if (xPos != -1 && yPos != -1 && zPos != -1 && xPos > 2 && yPos > xPos && zPos > yPos) {
-        int xEnd = yPos;
-        int yEnd = zPos;
-        int zEnd = findValueEnd(cmd, zPos + 1);
-        
-        float new_x = cmd.substring(xPos + 1, xEnd).toFloat() / 100.0; // Convert from cm to meters
-        float new_y = cmd.substring(yPos + 1, yEnd).toFloat() / 100.0; // Convert from cm to meters
-        float new_theta = cmd.substring(zPos + 1, zEnd).toFloat() * M_PI / 180.0; // Convert degrees to rad
-        
-        robot.setPosition(new_x, new_y, new_theta);
-        
-        if (debug) {
-          Serial.print("SET position to X:");
-          Serial.print(new_x * 100.0);
-          Serial.print(" Y:");
-          Serial.print(new_y * 100.0);
-          Serial.print(" Z:");
-          Serial.println(new_theta * 180.0 / M_PI);
-        }
-        
-        // Always send a position update after setting a new position
-        Serial.print("POS,X:");
-        Serial.print(robot.x * 100.0); // Convert x to cm
-        Serial.print(",Y:");
-        Serial.print(robot.y * 100.0); // Convert y to cm
-        Serial.print(",Z:");
-        Serial.println(robot.theta * 180.0 / M_PI); // Convert theta to degrees
-      }
-    }
-
-    // Find command character positions
-    int gPos = cmd.indexOf('G');
-    int yPos = cmd.indexOf('Y');
-    int zPos = cmd.indexOf('Z');
-    int vPos = cmd.indexOf('V');
-
-    // Parse Goal (G, Y, Z)
-    // Ensure G, Y, Z appear in that order for a valid goal command
-    if (gPos != -1 && yPos > gPos && zPos > yPos) {
-        int xEnd = yPos; // Value for X ends before Y
-        int yEnd = zPos; // Value for Y ends before Z
-        int zEnd = findValueEnd(cmd, zPos + 1); // Value for Z ends at the next command or end of string
-
-        // Convert incoming x_goal and y_goal from cm to meters
-        x_goal = cmd.substring(gPos + 1, xEnd).toFloat() / 100.0;
-        y_goal = cmd.substring(yPos + 1, yEnd).toFloat() / 100.0;
-        // Convert incoming theta_goal from degrees to radians
-        theta_goal = cmd.substring(zPos + 1, zEnd).toFloat() * M_PI / 180.0;
-        // If a new goal is set, ensure we start the alignment process (unless S was also sent)
-        if (State != STOP && State != SENDPOS) { // Avoid changing state if stopped or just sending pos
-             State = ALIGNING; // Start with alignment
-        }
-        
-        if (debug) {
-          Serial.print("New goal: X:");
-          Serial.print(x_goal * 100.0);
-          Serial.print(" Y:");
-          Serial.print(y_goal * 100.0);
-          Serial.print(" Z:");
-          Serial.println(theta_goal * 180.0 / M_PI);
-        }
-    }
-
-    // Parse Velocity (V)
-    if (vPos != -1) {
-      int vEnd = findValueEnd(cmd, vPos + 1);
-      v = cmd.substring(vPos + 1, vEnd).toFloat();
-      
-      if (debug) {
-        Serial.print("Set velocity: ");
-        Serial.println(v);
-      }
-    }
-
-    // Parse encoder position request (ENC1 or ENC2)
-    if (cmd.indexOf("ENC1") != -1) {
-      Serial.print("ENC1: ");
-      Serial.println(motorR.pos);
-    } else if (cmd.indexOf("ENC2") != -1) {
-      Serial.print("ENC2: ");
-      Serial.println(motorL.pos);
-    }
-
+    parseCommand(cmd);
   }
 
-
-  robot.updateOdometry(motorR.pos, motorL.pos);
+  robot.updateOdometry(-motorR.pos, motorL.pos);
+  unsigned long currentTime = millis();
+  dt = (currentTime - lastUpdateTime) / 1000.0; // Conversion en secondes
+  lastUpdateTime = currentTime;
   
-  // Safety check for NaN in robot position
-  if (isnan(robot.x) || isnan(robot.y) || isnan(robot.theta)) {
-    if (debug) Serial.println("ERROR: NaN detected in position. Resetting to origin.");
-    robot.setPosition(0, 0, 0);
-  }
-
   switch (State) {
     case STOP:
-      motorR.setMotorSpeed(0);
-      motorL.setMotorSpeed(0);
+      Freiner();
+      Serial.print("POS,X:"); Serial.print(robot.x); 
+      Serial.print(",Y:"); Serial.print(robot.y); 
+      Serial.print(",Z:"); Serial.println(robot.theta);
+      // Serial.print(angle_error); Serial.print("   ");Serial.print(speedR);Serial.print("   ");Serial.println(speedL); 
       break;
-
-    case ALIGNING:
-      { // Use braces to create a local scope for variables
-        float theta_diff = theta_goal - robot.theta;
-        // Normalize angle difference to [-PI, PI]
-        theta_diff = atan2(sin(theta_diff), cos(theta_diff));
-
-        if (abs(theta_diff) < alignment_tolerance) {
-          // Alignment complete, transition to NAVIGATION
-          State = NAVIGATION;
-          motorR.setMotorSpeed(0); // Stop briefly before navigating
-          motorL.setMotorSpeed(0);
-          if (debug) Serial.println("Alignment complete. Starting Navigation.");
-        } else {
-          // Still aligning, rotate in place (v=0)
-          float current_v = 0; // Linear velocity is zero during alignment
-          w = K_align * theta_diff; // Proportional control for angular velocity
-
-          // Add saturation for angular velocity during alignment
-          float max_align_w = 1.5; // rad/s - limit rotation speed
-          w = constrain(w, -max_align_w, max_align_w);
-
-          float speedR = (current_v + w * L) / r;
-          float speedL = (current_v - w * L) / r;
-
-          motorR.setMotorSpeed(speedR);
-          motorL.setMotorSpeed(speedL);
-
-          // Send position periodically during alignment if debug is on
-          if (debug) {
-            Serial.print("ALIGN: theta_diff=");
-            Serial.print(theta_diff * 180.0 / M_PI);
-            Serial.print(" w=");
-            Serial.println(w);
-          }
-          
-          // Always send position data during movement
-          Serial.print("POS,X:");
-          Serial.print(robot.x * 100.0); // Convert x to cm
-          Serial.print(",Y:");
-          Serial.print(robot.y * 100.0); // Convert y to cm
-          Serial.print(",Z:");
-          Serial.println(robot.theta * 180.0 / M_PI); // Convert theta to degrees
-        }
-      }
-      break;
-
+    
     case NAVIGATION:
-      // Check if goal is reached before calculating new speeds
-      if (sqrt(pow(robot.y - y_goal, 2) + pow(robot.x - x_goal, 2)) < eps) { // Use eps for goal check
-          State = STOP;
-          motorR.setMotorSpeed(0); // Stop motors immediately upon reaching goal
-          motorL.setMotorSpeed(0);
-          if (debug) Serial.println("Goal reached. Stopping.");
-          
-          // Always send final position when goal is reached
-          Serial.print("POS,X:");
-          Serial.print(robot.x * 100.0);
-          Serial.print(",Y:");
-          Serial.print(robot.y * 100.0);
-          Serial.print(",Z:");
-          Serial.print(robot.theta * 180.0 / M_PI);
-          Serial.println(",GOAL_REACHED");
-      } else {
-          float thetaref = atan2(y_goal - robot.y, x_goal - robot.x);
-          // Normalize angle difference to [-PI, PI]
-          float angle_diff = atan2(sin(thetaref - robot.theta), cos(thetaref - robot.theta));
-          w = K1 * angle_diff; // Use K1 for navigation angular control
+      thetaref = atan2(y_goal - robot.y, x_goal - robot.x);
+      w = Kp1 * atan2(sin(thetaref - robot.theta), cos(thetaref - robot.theta));
+      setNavigationSpeed(v, w);
 
-          // Basic saturation for angular velocity
-          float max_w = 2.0; // rad/s
-          w = constrain(w, -max_w, max_w);
+      Serial.print("POS,X:"); Serial.print(robot.x); 
+      Serial.print(",Y:"); Serial.print(robot.y); 
+      Serial.print(",Z:"); Serial.println(robot.theta);
+      // Serial.print(angle_error); Serial.print("   ");Serial.print(speedR);Serial.print("   ");Serial.println(speedL); 
+      break;
 
-          // Use the velocity 'v' set by the 'V' command or the default
-          // Add soft start - ramp up to desired velocity
-          static float current_v = 0;
-          if (current_v < v) {
-            current_v += 0.2; // Increment for smooth acceleration
-            if (current_v > v) current_v = v;
-          } else if (current_v > v) {
-            current_v -= 0.2; // Decrement for smooth deceleration
-            if (current_v < v) current_v = v;
-          }
-          
-          float speedR = (current_v + w * L) / r;
-          float speedL = (current_v - w * L) / r;
+    case ORIENTATION:
+      // Vérification de l'immobilité pour ajuster Kp2 (Utile si les moteurs n'arrivent pas à tourner et qu'il y a plus de frictions que dans les phases de réglage)
+      adjustKp2();
 
-          motorR.setMotorSpeed(speedR);
-          motorL.setMotorSpeed(speedL);
+      angle_error = atan2(sin(theta_goal - robot.theta), cos(theta_goal - robot.theta));
+      integral_angle_error += angle_error * dt;
+      w = Kp2 * angle_error + Ki2 * integral_angle_error;
+      setOrientationSpeed(w);
 
-          // Print debug info during navigation
-          if (debug) {
-            Serial.print("NAV: dist=");
-            Serial.print(sqrt(pow(robot.y - y_goal, 2) + pow(robot.x - x_goal, 2)));
-            Serial.print(" v=");
-            Serial.print(current_v);
-            Serial.print(" w=");
-            Serial.println(w);
-          }
-          
-          // Send position periodically during navigation
-          static unsigned long lastPosUpdate = 0;
-          if (millis() - lastPosUpdate > 100) { // Update position 10 times per second
-            Serial.print("POS,X:");
-            Serial.print(robot.x * 100.0); // Convert x to cm
-            Serial.print(",Y:");
-            Serial.print(robot.y * 100.0); // Convert y to cm
-            Serial.print(",Z:");
-            Serial.println(robot.theta * 180.0 / M_PI); // Convert theta to degrees
-            lastPosUpdate = millis();
-          }
-      }
+      Serial.print("POS,X:"); Serial.print(robot.x); 
+      Serial.print(",Y:"); Serial.print(robot.y); 
+      Serial.print(",Z:"); Serial.println(robot.theta);
+      // Serial.print(angle_error); Serial.print("   ");Serial.print(speedR);Serial.print("   ");Serial.println(speedL); 
       break;
 
     case SENDPOS:
-      Serial.print("POS,X:");
-      Serial.print(robot.x * 100.0); // Convert x to cm
-      Serial.print(",Y:");
-      Serial.print(robot.y * 100.0); // Convert y to cm
-      Serial.print(",Z:");
-      Serial.println(robot.theta * 180.0 / M_PI); // Convert theta to degrees
-      // Restore the state from before SENDPOS was triggered
-      State = previousState;
+      Serial.print("POS"); Serial.print(",X:");
+      Serial.print(robot.x); Serial.print(",Y:");
+      Serial.print(robot.y); Serial.print(",Z:");
+      Serial.println(robot.theta);
       break;
+
+    case RECULER:
+      thetaref = atan2(y_goal - robot.y, x_goal - robot.x) + pi;
+      thetaref = atan2(sin(thetaref), cos(thetaref));  // Normalise l'angle entre -π et π
+      w = Kp1 * atan2(sin(thetaref - robot.theta), cos(thetaref - robot.theta));
+      setNavigationSpeed(-v, w);
+
+      Serial.print("POS"); Serial.print(",X:");
+      Serial.print(robot.x); Serial.print(",Y:");
+      Serial.print(robot.y); Serial.print(",Z:");
+      Serial.println(robot.theta);
+      break;
+  }
+  Serial.println(State);
+  if ((State == NAVIGATION || State == RECULER) && sqrt(pow(robot.y - y_goal, 2) + pow(robot.x - x_goal, 2)) < eps) {Freiner(); Serial.println("STOP_NAVIGATION"); State = ORIENTATION; }
+  if (State == ORIENTATION && fabs(angle_error) < eps_theta) {Freiner(); Serial.println("STOP_ORIENTATION"); Kp2 = initial_Kp2; State = STOP;}   
+  //if (State == ORIENTATION && fabs(angle_error) < eps_theta && test == 1) {Freiner(); Kp2 = initial_Kp2; State = STOP;} Fonction pour tests                              
+}
+
+void Freiner() {
+  motorR.setMotorSpeed(0);
+  motorL.setMotorSpeed(0);
+}
+
+void setNavigationSpeed(float v, float w) {
+    float speedR = (v + w * L) / r;
+    float speedL = (v - w * L) / r;
+
+    motorR.setMotorSpeed(speedR);
+    motorL.setMotorSpeed(speedL);
+}
+
+void setOrientationSpeed(float w) {
+    const int MAX_SPEED = 200;
+    const int MIN_SPEED = 80;
+
+    float speedR = (w * L) / r;
+    float speedL = (-w * L) / r;
+
+    speedR = constrain(speedR, -MAX_SPEED, MAX_SPEED);
+    speedL = constrain(speedL, -MAX_SPEED, MAX_SPEED);
+
+    speedR = (speedR > 0) ? max(speedR, MIN_SPEED) : min(speedR, -MIN_SPEED);
+    speedL = (speedL > 0) ? max(speedL, MIN_SPEED) : min(speedL, -MIN_SPEED);
+
+    motorR.setMotorSpeed(speedR);
+    motorL.setMotorSpeed(speedL);
+}
+
+void adjustKp2() {
+    // Vérifie si le robot est immobile
+    if (robot.x == last_x && robot.y == last_y && robot.theta == last_theta) {
+        immobile_counter++;
+        if (immobile_counter >= immobile_threshold) {
+            Kp2 = min(Kp2 + Kp2_increment, max_Kp2);
+            immobile_counter = 0;
+            Serial.print("Kp2 ajusté : ");
+            Serial.println(Kp2);
+        }
+    } else {
+        immobile_counter = 0;
+    }
+
+    // Mise à jour des dernières positions
+    last_x = robot.x;
+    last_y = robot.y;
+    last_theta = robot.theta;
+}
+
+void parseCommand(String cmd) {
+  cmd.trim();
+
+  // Gestion des positions G et INIT
+  if (cmd.startsWith("G") || cmd.startsWith("INIT")) {
+      int x = cmd.indexOf('X');
+      int y = cmd.indexOf('Y');
+      int z = cmd.indexOf('Z');
+      
+      if (x != -1 && y != -1 && z != -1 && x < y && y < z) {
+          float xVal = cmd.substring(x + 1, y).toFloat();
+          float yVal = cmd.substring(y + 1, z).toFloat();
+          float zVal = cmd.substring(z + 1).toFloat();
+
+          if (cmd.startsWith("G")) {
+              x_goal = xVal;
+              y_goal = yVal;
+              theta_goal = zVal;
+              State = NAVIGATION;
+          } else if (cmd.startsWith("INIT")) {
+              x_init = xVal;
+              y_init = yVal;
+              theta_init = zVal;
+              robot.init(x_init, y_init, theta_init);
+              Serial.println("Initialisation : ");
+          }
+
+          // Affichage pour vérification
+          Serial.print("X : "); Serial.println(xVal);
+          Serial.print("Y : "); Serial.println(yVal);
+          Serial.print("Theta : "); Serial.println(zVal);
+      }
+  }
+
+  // Gestion des commandes simples
+  if (cmd.startsWith("S")) State = STOP;
+  if (cmd.startsWith("P")) State = SENDPOS;
+
+  // Gestion de la vitesse
+  int vPos = cmd.indexOf('V');
+  if (vPos != -1) {
+      v = cmd.substring(vPos + 1).toFloat();
+      Serial.print("Vitesse : "); Serial.println(v);
+  }
+
+  // Gestion du recul
+  if (cmd.startsWith("R")) {
+      float dist = cmd.substring(1).toFloat();
+      // Calcul du goal en marche arrière
+      x_goal = robot.x - dist * cos(robot.theta);
+      y_goal = robot.y - dist * sin(robot.theta);
+      theta_goal = robot.theta;
+      theta_goal = atan2(sin(theta_goal), cos(theta_goal));
+
+      Serial.print(x_goal);Serial.print(" ");Serial.print(y_goal);Serial.print(" ");Serial.println(theta_goal);
+      State = RECULER;
   }
 }

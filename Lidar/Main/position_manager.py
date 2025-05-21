@@ -49,19 +49,14 @@ class PositionManager:
         self._team_configs = {
             Team.YELLOW: {
                 'initial_pos': (0, 0, 0),  # x, y, orientation TODO: Change
-                'target_pos': (150, 180),  # x, y TODO: Remove?
             },
             Team.BLUE: {
                 'initial_pos': (0, 0, 0),  # x, y, orientation TODO: Change
-                'target_pos': (150, 180),  # x, y TODO: Remove?
             }
         }
 
-        # Robot position
+        # Robot position in meters
         self._pos_x, self._pos_y, self._pos_z = self._team_configs[self._team]['initial_pos']
-
-        # Target position
-        self._targ_x, self._targ_y = self._team_configs[self._team]['target_pos']
 
         # Movement state
         self._velocity = 0
@@ -78,10 +73,8 @@ class PositionManager:
 
             # Update initial positions based on team
             self._pos_x, self._pos_y, self._pos_z = self._team_configs[team]['initial_pos']
-            self._targ_x, self._targ_y = self._team_configs[team]['target_pos'] # TODO: Remove?
 
             logger.info(f"Initial position updated to: ({self._pos_x}, {self._pos_y}, {self._pos_z})")
-            logger.info(f"Target position updated to: ({self._targ_x}, {self._targ_y})") # TODO: Remove?
 
     def get_team(self):
         """Get current team"""
@@ -100,11 +93,6 @@ class PositionManager:
         with self._lock:
             return self._pos_x, self._pos_y, self._pos_z
 
-    def get_target(self):
-        """Get current target position (x, y)"""
-        with self._lock:
-            return self._targ_x, self._targ_y
-
     def get_velocity(self):
         """Get current velocity"""
         with self._lock:
@@ -119,13 +107,6 @@ class PositionManager:
             if z is not None:
                 self._pos_z = z
             logger.debug(f"Position updated: ({self._pos_x}, {self._pos_y}, {self._pos_z})")
-
-    def set_target(self, x, y):
-        """Set target position"""
-        with self._lock:
-            self._targ_x = x
-            self._targ_y = y
-            logger.debug(f"Target updated: ({self._targ_x}, {self._targ_y})")
 
     def set_velocity(self, velocity):
         """Set current velocity"""
