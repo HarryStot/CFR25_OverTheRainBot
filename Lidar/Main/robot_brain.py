@@ -388,10 +388,10 @@ class RobotBrain(threading.Thread):
             position_manager.set_team(team)
 
             # Send the initial position to the robot
-            initial_pos = position_manager.get_position()
+            initial_pos = position_manager.get_team_initial_pos()
             logger.info(f"Initial position set to: {initial_pos}")
             self.movement_interface.send_command(
-                f"INITX{initial_pos[0] / 100}Y{initial_pos[1] / 100}Z{initial_pos[2] * np.pi / 180}")
+                f"INITX{initial_pos[0] / 100:.2f}Y{initial_pos[1] / 100:.2f}Z{initial_pos[2] * np.pi / 180:.2f}")
 
             # Update LCD to show team is confirmed
             self.send_lcd_message(f"{team_name}", "CONFIRMED!")
@@ -438,6 +438,11 @@ class RobotBrain(threading.Thread):
             if self.stop_event.is_set():
                 return
 
+        initial_pos = position_manager.get_team_initial_pos()
+        logger.info(f"Initial position set to: {initial_pos}")
+        self.movement_interface.send_command(
+            f"INITX{initial_pos[0] / 100:.2f}Y{initial_pos[1] / 100:.2f}Z{initial_pos[2] * np.pi / 180:.2f}")
+
         # Display "Steady" message and wait for switch to be released (HIGH)
         logger.info("Steady...")
         self.send_lcd_message(f"Team {'Blue' if self.is_blue_team else 'Yellow'}", "Steady...")
@@ -448,6 +453,11 @@ class RobotBrain(threading.Thread):
             # Check if we should exit
             if self.stop_event.is_set():
                 return
+
+        initial_pos = position_manager.get_team_initial_pos()
+        logger.info(f"Initial position set to: {initial_pos}")
+        self.movement_interface.send_command(
+            f"INITX{initial_pos[0] / 100:.2f}Y{initial_pos[1] / 100:.2f}Z{initial_pos[2] * np.pi / 180:.2f}")
 
         # Display "Go" message and start the mission
         logger.info("GO!!!")
@@ -472,7 +482,7 @@ class RobotBrain(threading.Thread):
         self.clear_locations()
 
         if self.use_default_mission:
-            self.add_location(Location("Test", 177.5, 50.0, 90, [
+            self.add_location(Location("Test", 177.5, 10.0, 90, [
                 Task("Test", "SRV", {"10": ":0"}),
                 Task("Test2", "SRV", {"0": ":90", "1": ":90", "2": ":40", "3": ":45"}),
             ]))
@@ -535,8 +545,10 @@ class RobotBrain(threading.Thread):
         except Exception as e:
             logger.error(f"Error loading mission file {mission_file}: {str(e)}. Using default values.")
             # Add default/fallback locations if file has issues
-            self.add_location(Location("Test", 100, 0, -90))
-            self.add_location(Location("Test 2", 100, -100, -90))
+            self.add_location(Location("Test", 177.5, 5.0, 90, [
+                Task("Test", "SRV", {"10": ":0"}),
+                Task("Test2", "SRV", {"0": ":90", "1": ":90", "2": ":40", "3": ":45"}),
+            ]))
 
     def _process_action_sequence(self, sequence, task_templates, movement_templates, variables, params_override):
         """

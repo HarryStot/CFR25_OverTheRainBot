@@ -2,6 +2,8 @@
 import time
 import threading
 
+import numpy as np
+
 from position_manager import position_manager
 import logging
 import serial
@@ -144,6 +146,8 @@ class RobotInterface(threading.Thread):
             if "POS" in line:
                 self.position_received.set()
 
+                logger.debug(f"Received {line}")
+
                 x_match = re.search(r'X:?\s*([-+]?[0-9]*\.?[0-9]+)', line)
                 y_match = re.search(r'Y:?\s*([-+]?[0-9]*\.?[0-9]+)', line)
                 z_match = re.search(r'Z:?\s*([-+]?[0-9]*\.?[0-9]+)', line)
@@ -151,7 +155,7 @@ class RobotInterface(threading.Thread):
                 if all([x_match, y_match, z_match]):
                     x = float(x_match.group(1)) * 100
                     y = float(y_match.group(1)) * 100
-                    z = float(z_match.group(1)) * 100
+                    z = float(z_match.group(1)) * 180 / np.pi
                     position_manager.set_position(x, y, z)
                     logger.debug(f"Position updated: X={x}, Y={y}, Z={z}")
                 else:
@@ -195,6 +199,7 @@ class RobotInterface(threading.Thread):
         if self.connected:
             try:
                 if self.ser.is_open:
+                    self.ser.flush()  # Clear the input buffer before sending a command
                     logger.info(f"Send command: {command}")
                     self.ser.write(f"{command}\n".encode())
                 else:

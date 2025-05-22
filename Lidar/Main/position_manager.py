@@ -83,6 +83,11 @@ class PositionManager:
         with self._lock:
             return self._team
 
+    def get_team_initial_pos(self):
+        """Get initial position of the current team"""
+        with self._lock:
+            return self._team_configs[self._team]['initial_pos']
+
     # Getters
     def get_position(self):
         """

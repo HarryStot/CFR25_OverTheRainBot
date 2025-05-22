@@ -8,7 +8,7 @@ import signal
 
 # --- Configuration ---
 # GPIO pin your switch is connected to (using BCM numbering)
-SWITCH_PIN = 16
+SWITCH_PIN = 16  # Using GPIO 16 as in your example
 
 # Path to your main.py script
 MAIN_SCRIPT_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "main.py")
@@ -64,24 +64,25 @@ def main():
                         print(f"Error starting process: {e}")
                         process = None
                 else:  # Switch turned OFF
-                    print("Switch turned OFF - Stopping main.py")
+                    print("Switch turned OFF - Stopping main.py gracefully")
                     if process and process.poll() is None:  # If process is running
                         try:
-                            # First try gentle termination
-                            process.terminate()
-                            print(f"Sent termination signal to PID: {process.pid}")
+                            # Send SIGTERM to trigger graceful shutdown via signal_handler
+                            print(f"Sending SIGTERM to PID: {process.pid} for graceful shutdown")
+                            process.terminate()  # This sends SIGTERM
 
-                            # Give it some time to terminate gracefully
-                            time.sleep(2)
-
-                            # If still running, force kill
-                            if process.poll() is None:
-                                print("Process still running, sending SIGKILL...")
+                            # Give it generous time to shut down gracefully
+                            # Your main.py needs time to stop all threads properly
+                            print("Waiting for graceful shutdown (up to 15 seconds)...")
+                            try:
+                                exit_code = process.wait(timeout=15)
+                                print(f"Process exited gracefully with code: {exit_code}")
+                            except subprocess.TimeoutExpired:
+                                print("Graceful shutdown timeout - sending SIGKILL...")
                                 process.kill()
+                                exit_code = process.wait()
+                                print(f"Process force-killed with exit code: {exit_code}")
 
-                            # Get exit code
-                            exit_code = process.wait()
-                            print(f"Process exited with code: {exit_code}")
                         except Exception as e:
                             print(f"Error stopping process: {e}")
                     else:
@@ -113,14 +114,20 @@ def main():
     finally:
         # Clean up before exiting
         if process and process.poll() is None:
-            print("Terminating main.py process before exit")
+            print("Terminating main.py process gracefully before exit")
             try:
+                # Send SIGTERM for graceful shutdown
                 process.terminate()
-                time.sleep(1)
-                if process.poll() is None:
+                print("Waiting for graceful shutdown...")
+                try:
+                    process.wait(timeout=15)
+                    print("Process shut down gracefully")
+                except subprocess.TimeoutExpired:
+                    print("Graceful shutdown timeout - force killing")
                     process.kill()
-            except:
-                pass
+                    process.wait()
+            except Exception as e:
+                print(f"Error during cleanup: {e}")
 
         GPIO.cleanup()
         print("GPIO cleanup done. Exiting.")
