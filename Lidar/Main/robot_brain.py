@@ -15,8 +15,6 @@ from position_manager import position_manager
 logger = logging.getLogger(__name__)
 
 
-
-
 class RobotState(Enum):
     """
     Represents the different states a robot can be in during its operation.
@@ -392,7 +390,8 @@ class RobotBrain(threading.Thread):
             # Send the initial position to the robot
             initial_pos = position_manager.get_position()
             logger.info(f"Initial position set to: {initial_pos}")
-            self.movement_interface.send_command(f"INITX{initial_pos[0] / 100}Y{initial_pos[1] / 100}Z{initial_pos[2] * np.pi / 180}")
+            self.movement_interface.send_command(
+                f"INITX{initial_pos[0] / 100}Y{initial_pos[1] / 100}Z{initial_pos[2] * np.pi / 180}")
 
             # Update LCD to show team is confirmed
             self.send_lcd_message(f"{team_name}", "CONFIRMED!")
@@ -473,11 +472,12 @@ class RobotBrain(threading.Thread):
         self.clear_locations()
 
         if self.use_default_mission:
-            self.add_location(Location("Test", 100, 0, -90))
-            self.add_location(Location("Test 2", 100, -100, -90))
+            self.add_location(Location("Test", 177.5, 50.0, 90, [
+                Task("Test", "SRV", {"10": ":0"}),
+                Task("Test2", "SRV", {"0": ":90", "1": ":90", "2": ":40", "3": ":45"}),
+            ]))
             logger.warning("Using default mission locations")
             return
-
 
         # Determine which file to load based on team
         mission_file = "blue_missions.json" if self.is_blue_team else "yellow_missions.json"
@@ -689,13 +689,13 @@ class RobotBrain(threading.Thread):
             if value.startswith('$') and ':' not in value:
                 var_name = value[1:]
                 return variables.get(var_name, value)
-                
+
             # Complex string with embedded variables
             if '$' in value:
                 import re
                 result = value
                 var_refs = re.findall(r'\$([a-zA-Z0-9_]+)', value)
-                
+
                 # Replace each variable reference
                 for var_name in var_refs:
                     if var_name in variables:
@@ -703,7 +703,7 @@ class RobotBrain(threading.Thread):
                         # Replace variable with its value, converting to string if needed
                         result = result.replace(f'${var_name}', var_value)
                 return result
-                
+
         # Return primitive values as is
         return value
 
@@ -748,6 +748,7 @@ class RobotBrain(threading.Thread):
         if remaining_time <= self.end_zone_time:
             logger.warning(f"Only {remaining_time:.1f} seconds remaining! Heading to end zone.")
             # TODO: Implement end zone navigation
+            self.current_location_index = -1  # Reset to end zone
             return
 
         # Internal state for navigation phase
@@ -1067,7 +1068,7 @@ class RobotBrain(threading.Thread):
         self.last_lcd_line2 = line2
         # Use the action command method to send LCD commands
         self.send_action_command("LCD", params)
-        # logger.debug(f"Sent to LCD - Line 1: '{line1}', Line 2: '{line2}'")
+        logger.debug(f"Sent to LCD - Line 1: '{line1}', Line 2: '{line2}'")
 
     def run(self):
         """Main brain thread function"""
