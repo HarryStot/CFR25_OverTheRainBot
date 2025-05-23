@@ -521,10 +521,10 @@ class RobotBrain(threading.Thread):
         self.current_task_index = -1
 
         # Initialize the servos and other components
-        self.action_interface().send_command("SRV0:90;1:90;2:40;3:45")
+        self.action_interface().send_command("SRV0:90;1:90;2:40;3:45;15:10")
 
         # Let go of the banner
-        self.action_interface().send_command("SRV15:140")
+        self.action_interface().send_command("SRV10:140")
 
         # Move to navigating state to go to first location
         self.set_state(RobotState.NAVIGATING)
