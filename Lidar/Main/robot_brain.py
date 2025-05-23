@@ -206,8 +206,14 @@ class RobotBrain(threading.Thread):
         self.current_state = RobotState.TEAM_SELECTION
         self.previous_state = None
         self.state_changed = threading.Event()
-        self.avoidance_enabled = False
+        self.avoidance_enabled = False # Use potential field navigation
         self.use_default_mission = False  # Use default missions
+
+        # Obstacle avoidance parameters
+        self.obstacle_safety_distance = 50.0  # cm - minimum safe distance from obstacles
+        self.is_avoiding_obstacle = False
+        self.last_obstacle_check_time = 0
+        self.obstacle_check_interval = 0.1  # seconds between obstacle checks
 
         # Last position sent to the robot
         self.last_sent_position = None  # Last position sent to the robot
@@ -295,6 +301,50 @@ class RobotBrain(threading.Thread):
                 if len(obstacle_list) < 5:  # Only log details for a few obstacles
                     for obs in obstacle_list:
                         logger.debug(f"Obstacle at ({obs[0]:.1f}, {obs[1]:.1f}), size: {obs[2]:.1f}x{obs[3]:.1f}")
+
+            # Check for obstacles after updating the list
+            self.check_for_obstacles()
+
+    def check_for_obstacles(self):
+        """
+        Checks if there are any obstacles within the safety distance of the robot.
+        If an obstacle is detected within the safety distance, the robot will stop.
+
+        :return: True if obstacles are detected within safety distance, False otherwise
+        :rtype: bool
+        """
+        current_time = time.time()
+
+        # Limit how often we check to avoid excessive processing
+        if current_time - self.last_obstacle_check_time < self.obstacle_check_interval:
+            return self.is_avoiding_obstacle
+
+        self.last_obstacle_check_time = current_time
+
+        if not self.obstacles:
+            self.is_avoiding_obstacle = False
+            return False
+
+        # Get current position
+        current_x, current_y, _ = position_manager.get_position()
+        robot_pos = np.array([current_x, current_y])
+
+        # Check distance to each obstacle
+        for obs_pos in self.obstacles:
+            obs_pos = np.array(obs_pos)
+            distance = np.linalg.norm(robot_pos - obs_pos)
+
+            # If obstacle is too close, stop the robot
+            if distance < self.obstacle_safety_distance:
+                if not self.is_avoiding_obstacle:
+                    logger.warning(f"Obstacle detected at distance {distance:.2f}cm! Stopping robot.")
+                    self.send_movement_command("S")  # Stop command
+                    self.is_avoiding_obstacle = True
+                return True
+
+        # No obstacles within safety distance
+        self.is_avoiding_obstacle = False
+        return False
 
     def add_location(self, location):
         """
@@ -752,7 +802,8 @@ class RobotBrain(threading.Thread):
         If avoidance_enabled is True, the robot will move through dynamically generated waypoints
         (goals) computed by the potential field system, instead of going directly to the final goal.
         Each segment is a straight line, and a new goal is sent only when the previous one is reached.
-        Logs and comments are in English.
+        Also implements a simple obstacle avoidance system that stops the robot when obstacles are
+        detected too close, regardless of whether potential field navigation is enabled.
         """
         current_location = self.locations[self.current_location_index]
         elapsed_time = time.time() - self.mission_start_time
@@ -761,6 +812,13 @@ class RobotBrain(threading.Thread):
             logger.warning(f"Only {remaining_time:.1f} seconds remaining! Heading to end zone.")
             # TODO: Implement end zone navigation
             self.current_location_index = -1  # Reset to end zone
+            return
+
+        # Check for obstacles and stop if necessary
+        if self.check_for_obstacles():
+            # If we're avoiding an obstacle, don't proceed with navigation
+            logger.warning("Obstacle detected! Navigation paused.")
+            self.send_lcd_message("WARNING!", "Obstacle Detected")
             return
 
         # Internal state for navigation phase
@@ -928,7 +986,7 @@ class RobotBrain(threading.Thread):
 
         # Continue navigating to end zone
         self.send_movement_command(
-            f"GX{end_location.x / 100:.2f}Y{end_location.y / 100:.2f}Z{end_location.orientation / 100:.2f}")
+            f"GX{end_location.x / 100:.2f}Y{end_location.y / 100:.2f}Z{((end_location.orientation if end_location.orientation is not None else 0) * np.pi / 180):.2f}")
         logger.info(f"Returning to end zone, distance: {distance:.2f}")
 
         # Check if we're about to run out of time
@@ -1054,6 +1112,27 @@ class RobotBrain(threading.Thread):
             if detected != self.obstacle_detected:
                 self.obstacle_detected = detected
                 logger.info(f"Obstacle detection changed: {detected}")
+
+    def toggle_avoidance_system(self, enabled=None):
+        """
+        Toggles the obstacle avoidance system on or off. If enabled parameter is provided,
+        sets the system to that state; otherwise, toggles the current state.
+
+        :param enabled: Optional boolean to set the avoidance system state explicitly.
+        :type enabled: bool or None
+        :return: The new state of the avoidance system (True=enabled, False=disabled)
+        :rtype: bool
+        """
+        with self.lock:
+            if enabled is None:
+                self.avoidance_enabled = not self.avoidance_enabled
+            else:
+                self.avoidance_enabled = enabled
+
+            state_str = "enabled" if self.avoidance_enabled else "disabled"
+            logger.info(f"Avoidance system {state_str}")
+
+            return self.avoidance_enabled
 
     def send_lcd_message(self, line1="", line2=""):
         """
