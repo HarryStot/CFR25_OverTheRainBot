@@ -323,6 +323,12 @@ class MissionTester:
         :param params: Additional parameters for the command as key-value pairs. Defaults to None.
         :return: None
         """
+        if command == "F" or command == "R":
+            # Handle special commands
+            logger.info(f"Sending special command: {command + str(params['distance'] / 100)}")
+            return command + str(params['distance'] / 100)
+
+
         if self.action_interface and self.action_interface.connected:
             try:
                 # Build the command string based on the command and params

@@ -132,16 +132,10 @@
 
   "movement_templates": {
     "precision_approach": [
-      {"command": "V", "params": {"speed": "$precision_movement_speed"}},
       {"command": "F", "params": {"distance": 5}}
     ],
-    "turn_around": [
-      {"command": "V", "params": {"speed": "$rotation_speed"}},
-      {"command": "R", "params": {"angle": 180}}
-    ],
     "back_up": [
-      {"command": "V", "params": {"speed": "$movement_speed"}},
-      {"command": "B", "params": {"distance": 5}}
+      {"command": "R", "params": {"distance": 5}}
     ]
   },
 

@@ -4,7 +4,7 @@
     <content url="file://$MODULE_DIR$">
       <excludeFolder url="file://$MODULE_DIR$/Python_test/pythonProject1/.venv" />
     </content>
-    <orderEntry type="jdk" jdkName="Remote Python 3.11.2 (sftp://overtherainbot@100.86.9.117:22/home/overtherainbot/.virtualenvs/Lidar/bin/python)" jdkType="Python SDK" />
+    <orderEntry type="jdk" jdkName="main_conda" jdkType="Python SDK" />
     <orderEntry type="sourceFolder" forTests="false" />
   </component>
 </module>

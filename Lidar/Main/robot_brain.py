@@ -1037,6 +1037,8 @@ class RobotBrain(threading.Thread):
             - "P" (get position command)
             - "INITX10.0Y20.0Z90.0" (initialize position command)
             - "V50" (set velocity command)
+            - "F10" (move forward command)
+            - "R10" (move backward command)
 
         :param command: Movement command to be sent to the movement interface.
         :type command: str
@@ -1080,6 +1082,11 @@ class RobotBrain(threading.Thread):
         :type params: dict, optional
         :return: None
         """
+        if command == "F" or command == "R":
+            # Special case for F and R commands
+            self.send_movement_command(command + str(params["distance"] / 100))
+            return
+
         if self.action_interface and self.action_interface.connected:
             try:
                 # Build the command string based on the command and params
