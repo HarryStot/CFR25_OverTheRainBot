@@ -32,6 +32,8 @@ Motor motorL(ENCAG, ENCBG, PWMG, PINAG, PINBG);
 Odometry robot(L, r);
 Ultrason capteurUltrason(TRIG_PIN, ECHO_PIN);
 
+
+
 // --- Position initiale et objectifs ---
 float x_init = 0, y_init = 0, theta_init = 0;
 float thetaref = 0;
@@ -43,18 +45,20 @@ struct Goal {
     float theta;
 };
 
-Goal goals[1] = {
-    {1.0, -0.38, 1.57}
+Goal goals[3] = {
+    {0.8, -0.40, -0.45},
+    {1.05, -0.40, 1.0},
+    {1.30, -0.23, 1.45},
 };
 
-int goalCount = 1;
+int goalCount = 3;
 int currentGoalIndex = 0;
 float x_goal = goals[currentGoalIndex].x, y_goal = goals[currentGoalIndex].y, theta_goal = goals[currentGoalIndex].theta;
 
 // --- Gains pour la navigation et l'orientation ---
 const float initial_Kp1 = 1, initial_Kp2 = 40;
 float Kp1 = initial_Kp1;  // NAVIGATION
-float K = 60, Kp2 = initial_Kp2;  // ORIENTATION
+float K = 50, Kp2 = initial_Kp2;  // ORIENTATION
 const float eps = 0.02, eps_theta = 0.08;
 
 // --- Variables pour l'ajustement dynamique de Kp2 ---
@@ -72,7 +76,7 @@ unsigned long lastUpdateTime = 0;
 float dt = 0.0;
 
 // --- États du robot ---
-enum StateType { STOP, NAVIGATION, ORIENTATION, OBSTACLE, DANSER};
+enum StateType { STOP, NAVIGATION, ORIENTATION, DANSER,OBSTACLE};
 StateType State = NAVIGATION;
 StateType PreviousState = NAVIGATION;
 
@@ -87,6 +91,7 @@ void setup() {
     Serial.println("Initialisation");
     wait(1);
     Serial.println("Match");
+    capteurUltrason.begin();
 
     motorR.init();
     motorL.init();
@@ -128,6 +133,7 @@ void loop() {
       Serial.println("Obstacle dégagé. Reprise.");
   }
 
+  
   switch (State) {
     case STOP:
       Freiner();
@@ -172,10 +178,11 @@ void loop() {
       digitalWrite(DANSEUR, HIGH);
       break;
   }
+  Serial.println(State);
   // Serial.println(currentMillis);
   //Transitions
   //DEPART A 85s
-  if (currentMillis >= 0 && !parti) {State = NAVIGATION; parti = true;}
+  if (currentMillis >= 85000 && !parti) {State = NAVIGATION; parti = true;}
   if (State == NAVIGATION  && sqrt(pow(robot.y - y_goal, 2) + pow(robot.x - x_goal, 2)) < eps) { Freiner(); Kp2 = initial_Kp2; Kp1 = initial_Kp1; angle_error = atan2(sin(theta_goal - robot.theta), cos(theta_goal - robot.theta)); State = ORIENTATION; }
   if (State == ORIENTATION && fabs(angle_error) < eps_theta && currentGoalIndex < goalCount) { Freiner(); Kp2 = initial_Kp2; Kp1 = initial_Kp1; currentGoalIndex++; x_goal = goals[currentGoalIndex].x; y_goal = goals[currentGoalIndex].y; theta_goal = goals[currentGoalIndex].theta; State = NAVIGATION; }        
   if (currentGoalIndex == goalCount) { State = DANSER; }                    
